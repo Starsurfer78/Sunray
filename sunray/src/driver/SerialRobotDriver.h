@@ -14,7 +14,7 @@
   #include <Process.h>
 #endif
 #ifdef ENABLE_SIMPLE_WIFI_RESTART
-  #include "../SimpleWifiRestart.h"
+  #include "SimpleWifiRestart.h"
 #endif
 
 
