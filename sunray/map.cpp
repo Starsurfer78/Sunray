@@ -10,6 +10,7 @@
 #include "helper.h"
 #include "src/memory_guard.h"
 #include "src/stack_allocator.h"
+#include "src/memory_monitor.h"
 #include <Arduino.h>
 #include <cfloat>
 
@@ -720,7 +721,7 @@ bool Map::setPoint(int idx, float x, float y){
     clearMap();
   }    
   if (idx % 100 == 0){
-    if (freeMemory () < 20000){
+    if (MemoryMonitor::getFreeMemory() < 20000){
       CONSOLE.println("OUT OF MEMORY");
       return false;
     }
@@ -1976,7 +1977,7 @@ bool Map::initializePathfinding(Point &src, Point &dst) {
   int idx = 0;
   if (!pathFinderObstacles.alloc(1 + exclusions.numPolygons + obstacles.numPolygons)) return false;
   
-  if (freeMemory () < 5000){
+  if (MemoryMonitor::getFreeMemory() < 5000){
     CONSOLE.println("OUT OF MEMORY");
     return false;
   }
@@ -2000,7 +2001,7 @@ bool Map::initializePathfinding(Point &src, Point &dst) {
   // create nodes
   int allocNodeCount = exclusions.numPoints() + obstacles.numPoints() + perimeterPoints.numPoints + 2;
   CONSOLE.print ("freem=");
-  CONSOLE.print(freeMemory ());    
+  CONSOLE.print(MemoryMonitor::getFreeMemory());    
   CONSOLE.print("  allocating nodes ");
   CONSOLE.print(allocNodeCount);
   CONSOLE.print(" (");
@@ -2042,7 +2043,7 @@ bool Map::initializePathfinding(Point &src, Point &dst) {
   idx++;
   
   CONSOLE.print ("freem=");
-  CONSOLE.println (freeMemory ());
+  CONSOLE.println (MemoryMonitor::getFreeMemory());
   
   return true;
 }

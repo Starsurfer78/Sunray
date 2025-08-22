@@ -178,7 +178,6 @@ extern TimeTable timetable;
   extern UBLOX gps;
 #endif
 
-int freeMemory();
 void start();
 void run();
 void setOperation(OperationType op, bool allowRepeat = false);

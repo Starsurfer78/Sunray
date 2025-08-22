@@ -10,6 +10,7 @@
 #include "httpserver.h"
 #include "ble.h"
 #include "events.h"
+#include "src/memory_monitor.h"
 
 #ifdef __linux__
   #include <BridgeClient.h>
@@ -705,7 +706,7 @@ void cmdStats(){
   s += ",";
   s += statMowObstacles;
   s += ",";
-  s += freeMemory();
+  s += MemoryMonitor::getFreeMemory();
   s += ",";
   s += getResetCause();
   s += ",";
@@ -1057,7 +1058,7 @@ void outputConsole(){
       #endif
     #else
       CONSOLE.print (" freem=");
-      CONSOLE.print (freeMemory());  
+      CONSOLE.print (MemoryMonitor::getFreeMemory());  
       uint32_t *spReg = (uint32_t*)__get_MSP();   // stack pointer
       CONSOLE.print (" sp=");
       CONSOLE.print (*spReg, HEX);
