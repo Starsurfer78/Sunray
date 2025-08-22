@@ -1,0 +1,29 @@
+#ifndef RESET_H
+#define RESET_H
+
+enum ResetCause {
+  RST_UNKNOWN,
+  RST_POWER_ON,
+  RST_EXTERNAL,
+  RST_BROWN_OUT,
+  RST_WATCHDOG,
+  RST_SOFTWARE,
+  RST_BACKUP,
+};
+
+
+ResetCause getResetCause();
+void logResetCause();
+
+// Include new memory monitoring system
+#include "src/memory_monitor.h"
+
+// Legacy function - use MemoryMonitor::getFreeMemory() instead
+int freeMemory() __attribute__((deprecated("Use MemoryMonitor::getFreeMemory() instead")));
+
+#ifndef __linux__
+  extern "C" char* sbrk(int incr);
+#endif
+
+#endif
+
