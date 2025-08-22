@@ -11,7 +11,17 @@
  */
 class SimpleWifiRestart {
 public:
+    enum WifiStatus {
+        CONNECTED,
+        DISCONNECTED,
+        RESTARTING,
+        FAILED
+    };
+    
     SimpleWifiRestart();
+    
+    // Initialization
+    void begin();
     
     // Checks WiFi status and restarts if needed
     void checkAndRestart();
@@ -25,6 +35,7 @@ public:
     
     // Status
     bool isWifiConnected() const { return wifiConnected; }
+    WifiStatus getStatus() const { return currentStatus; }
     int getFailureCount() const { return consecutiveFailures; }
     unsigned long getCheckInterval() const { return checkIntervalMs; }
     unsigned long getRestartTimeout() const { return maxConsecutiveFailures; }
@@ -35,10 +46,12 @@ private:
     int consecutiveFailures;
     int maxConsecutiveFailures;
     bool wifiConnected;
+    WifiStatus currentStatus;
     
     // Hilfsfunktionen
     bool checkWifiStatus();
     void restartWifiAdapter();
+    void updateStatus();
 };
 
 #endif // SIMPLE_WIFI_RESTART_H

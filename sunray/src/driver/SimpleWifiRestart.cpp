@@ -11,6 +11,12 @@ SimpleWifiRestart::SimpleWifiRestart() {
     consecutiveFailures = 0;
     maxConsecutiveFailures = WIFI_RESTART_MAX_FAILURES; // configurable max failures
     wifiConnected = false;
+    currentStatus = DISCONNECTED;
+}
+
+void SimpleWifiRestart::begin() {
+    Serial.println("SimpleWifiRestart: Initializing...");
+    updateStatus();
 }
 
 void SimpleWifiRestart::checkAndRestart() {
@@ -29,13 +35,16 @@ void SimpleWifiRestart::checkAndRestart() {
     if (connected) {
         consecutiveFailures = 0;
         wifiConnected = true;
+        currentStatus = CONNECTED;
     } else {
         consecutiveFailures++;
         wifiConnected = false;
+        currentStatus = DISCONNECTED;
         
         // After multiple failures: restart
         if (consecutiveFailures >= maxConsecutiveFailures) {
             Serial.println("WiFi: Multiple connection errors - restarting adapter");
+            currentStatus = RESTARTING;
             forceRestart();
             consecutiveFailures = 0; // Reset after restart
         }
@@ -44,12 +53,14 @@ void SimpleWifiRestart::checkAndRestart() {
 
 void SimpleWifiRestart::forceRestart() {
     Serial.println("WiFi: Restarting adapter...");
+    currentStatus = RESTARTING;
     restartWifiAdapter();
     
     // Wait after restart (configurable delay)
     delay(WIFI_RESTART_DELAY);
     
     Serial.println("WiFi: Restart completed");
+    updateStatus();
 }
 
 bool SimpleWifiRestart::checkWifiStatus() {
@@ -87,4 +98,19 @@ void SimpleWifiRestart::restartWifiAdapter() {
 #else
     Serial.println("WiFi restart only available on Linux");
 #endif
+}
+
+void SimpleWifiRestart::updateStatus() {
+    bool connected = checkWifiStatus();
+    if (connected) {
+        currentStatus = CONNECTED;
+        wifiConnected = true;
+    } else {
+        if (currentStatus == RESTARTING) {
+            currentStatus = FAILED;
+        } else {
+            currentStatus = DISCONNECTED;
+        }
+        wifiConnected = false;
+    }
 }
