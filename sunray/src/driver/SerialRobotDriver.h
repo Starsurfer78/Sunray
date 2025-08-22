@@ -9,6 +9,7 @@
 #define SERIAL_ROBOT_DRIVER_H
 
 #include <Arduino.h>
+#include "../../config.h"
 #include "RobotDriver.h"
 #ifdef __linux__
   #include <Process.h>
