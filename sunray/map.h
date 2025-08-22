@@ -254,6 +254,9 @@ class Map
     int linePolygonIntersectionCount(Point &src, Point &dst, Polygon &poly);
     void testIntegerCalcs();
     
+    // Helper function for pathfinder safety calculations
+    float distanceToPolygonEdge(float x, float y, Polygon &polygon);
+    
     // Refactored helper functions for findPath()
     bool initializePathfinding(Point &src, Point &dst);
     Node* processPathfindingNodes(Point &src, Point &dst, unsigned long startTime);

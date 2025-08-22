@@ -9,9 +9,9 @@
 #include "config.h"
 
 
-// Spannungsteiler Gesamtspannung ermitteln (Reihenschaltung R1-R2, U2 bekannt, U_GES zu ermitteln)
+// Calculate total voltage of voltage divider (series connection R1-R2, U2 known, U_total to be determined)
 float voltageDividerUges(float R1, float R2, float U2){
-	return (U2/R2 * (R1+R2));  // Uges 
+	return (U2/R2 * (R1+R2));  // Utotal 
 }
 
 
@@ -271,15 +271,7 @@ float serialToFloat(HardwareSerial* serial){
   return b.floatingPoint;
 }
 
-int freeRam () {
-#ifdef __AVR__
-  extern int __heap_start, *__brkval; 
-  int v; 
-  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
-#else
-  return 0;
-#endif
-}
+
 
 
 
@@ -337,13 +329,5 @@ float parseFloatValue(String s, String key){
     n+= s[idx]; idx++;
   }
   return n.toFloat();
-}
-
-
-void toEulerianAngle(float w, float x, float y, float z, float& roll, float& pitch, float& yaw)
-{
-  // DEPRECATED: Diese Funktion wird durch QuaternionMath::toEulerAngles ersetzt
-  // Delegiere an die neue zentrale Implementierung
-  QuaternionMath::toEulerAngles(w, x, y, z, roll, pitch, yaw);
 }
 

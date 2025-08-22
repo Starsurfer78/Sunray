@@ -53,7 +53,7 @@ float parseFloatValue(String s, String key);
 #include "src/memory_monitor.h"
 
 // Legacy function - use MemoryMonitor::getFreeMemory() instead
-int freeRam () __attribute__((deprecated("Use MemoryMonitor::getFreeMemory() instead")));
+
 
 /*
  * Returns random number in normal distribution centering on 0.
@@ -79,7 +79,6 @@ float ADC2voltage(float ADCvalue);
 // Include zentrale Quaternion-Mathematik
 #include "QuaternionMath.h"
 
-// quaternion to euler angles (DEPRECATED: Use QuaternionMath::toEulerAngles instead)
-void toEulerianAngle(float w, float x, float y, float z, float& roll, float& pitch, float& yaw);
+
 
 #endif

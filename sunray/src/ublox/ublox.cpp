@@ -14,7 +14,7 @@ SFE_UBLOX_GPS configGPS; // used for f9p module configuration only
 
 
 // used to send .ubx log files via 'sendgps.py' to Arduino (also set GPS to Serial in config for this)
-//#define GPS_DUMP   1    
+// #define GPS_DUMP   1    
 
 
 UBLOX::UBLOX()
@@ -132,14 +132,14 @@ void UBLOX::begin(HardwareSerial& bus,uint32_t baud)
 bool UBLOX::configure(){
   CONSOLE.println("trying to connect to ublox f9p...");
   CONSOLE.println("NOTE: if GPS is not responding either set 'GPS_CONFIG=false' in config.h or perform GPS wire fix (see Wiki)");
-  //configGPS.enableDebugging(CONSOLE, false);
+  // configGPS.enableDebugging(CONSOLE, false);
   
   while(true){
     CONSOLE.print("trying baud ");
     CONSOLE.println(_baud);        
     if (configGPS.begin(*_bus)) break;    
     CONSOLE.println(F("ERROR: GPS receiver is not responding"));            
-    //Logger.event(EVT_ERROR_GPS_NOT_CONNECTED);
+    // Logger.event(EVT_ERROR_GPS_NOT_CONNECTED);
     CONSOLE.println("trying baud 38400");    
     _bus->begin(38400);
     if (configGPS.begin(*_bus)) {
@@ -194,7 +194,7 @@ bool UBLOX::configure(){
         setValueSuccess &= configGPS.addCfgValset8(0x209100c1, 0); // CFG-MSGOUT-NMEA_ID_GSA_UART2   (off)
         setValueSuccess &= configGPS.addCfgValset8(0x209100d5, 0); // CFG-MSGOUT-NMEA_ID_GST_UART2   (off)
         setValueSuccess &= configGPS.addCfgValset8(0x209100c6, 0); // CFG-MSGOUT-NMEA_ID_GSV_UART2   (off)
-        //setValueSuccess &= configGPS.addCfgValset8(0x20910402, 0); // CFG-MSGOUT-NMEA_ID_RLM_UART2    (fails)
+        // setValueSuccess &= configGPS.addCfgValset8(0x20910402, 0); // CFG-MSGOUT-NMEA_ID_RLM_UART2    (fails)
         setValueSuccess &= configGPS.addCfgValset8(0x209100ad, 0); // CFG-MSGOUT-NMEA_ID_RMC_UART2   (off)
         setValueSuccess &= configGPS.addCfgValset8(0x209100e9, 0); // CFG-MSGOUT-NMEA_ID_VLW_UART2   (off)
         setValueSuccess &= configGPS.addCfgValset8(0x209100b2, 0); // CFG-MSGOUT-NMEA_ID_VTG_UART2   (off)
@@ -236,9 +236,9 @@ bool UBLOX::configure(){
         // ----  gps navx5 input filter ----------------------------------
         // minimum input signals the receiver should use
         // https://wiki.ardumower.de/index.php?title=Ardumower_Sunray#RTK_float-to-fix_recovery_and_false-fix_issues  
-        //setValueSuccess &= configGPS.addCfgValset8(0x201100a1, 3); // CFG-NAVSPG-INFIL_MINSVS
-        //setValueSuccess &= configGPS.addCfgValset8(0x201100a2, 32); // CFG-NAVSPG-INFIL_MAXSVS
-        //setValueSuccess &= configGPS.addCfgValset8(0x201100a3, 6); // CFG-NAVSPG-INFIL_MINCNO     
+        // setValueSuccess &= configGPS.addCfgValset8(0x201100a1, 3); // CFG-NAVSPG-INFIL_MINSVS
+        // setValueSuccess &= configGPS.addCfgValset8(0x201100a2, 32); // CFG-NAVSPG-INFIL_MAXSVS
+        // setValueSuccess &= configGPS.addCfgValset8(0x201100a3, 6); // CFG-NAVSPG-INFIL_MINCNO     
         // ----  gps nav5 input filter ----------------------------------
         // minimum condition when the receiver should try a navigation solution
         // https://wiki.ardumower.de/index.php?title=Ardumower_Sunray#RTK_float-to-fix_recovery_and_false-fix_issues
@@ -295,7 +295,7 @@ bool UBLOX::configure(){
 
 void UBLOX::reboot(){
   CONSOLE.println("rebooting GPS receiver...");
-  //configGPS.hardReset();
+  // configGPS.hardReset();
   configGPS.GNSSRestart();
 }
 
@@ -449,7 +449,7 @@ void UBLOX::dispatchMessage() {
           case 0x07:
             { // UBX-NAV-PVT
               iTOW = (unsigned long)this->unpack_int32(0);
-              //numSV = this->unpack_int8(23);               
+              // numSV = this->unpack_int8(23);               
               if (verbose) CONSOLE.println("UBX-NAV-PVT");
             }
             break;
@@ -458,8 +458,8 @@ void UBLOX::dispatchMessage() {
               iTOW = (unsigned long)this->unpack_int32(0);
               groundSpeed = ((double)((unsigned long)this->unpack_int32(20))) / 100.0;
               heading = ((double)this->unpack_int32(24)) * 1e-5 / 180.0 * PI;
-              //CONSOLE.print("heading:");
-              //CONSOLE.println(heading);
+              // CONSOLE.print("heading:");
+              // CONSOLE.println(heading);
               if (verbose) {
                 CONSOLE.print("UBX-NAV-VELNED ");
                 CONSOLE.print("groundSpeed=");
@@ -475,13 +475,13 @@ void UBLOX::dispatchMessage() {
               lon = 1e-7  * (    ((float)((int32_t)this->unpack_int32(8)))   +  ((float)((int8_t)this->unpack_int8(24))) * 1e-2    );
               lat = 1e-7  *  (   ((float)((int32_t)this->unpack_int32(12)))   +  ((float)((int8_t)this->unpack_int8(25))) * 1e-2   );
               height = 1e-3 * (  ((float)((int32_t)this->unpack_int32(16))) +  ((float)((int8_t)this->unpack_int8(26))) * 1e-2    ) ; // HAE (WGS84 height)
-              //height = (1e-3 * (this->unpack_int32(20) +  (this->unpack_int8(27) * 1e-2))); // MSL height
+              // height = (1e-3 * (this->unpack_int32(20) +  (this->unpack_int8(27) * 1e-2))); // MSL height
               hAccuracy = ((double)((unsigned long)this->unpack_int32(28))) * 0.1 / 1000.0;
               vAccuracy = ((double)((unsigned long)this->unpack_int32(32))) * 0.1 / 1000.0;
               accuracy = sqrt(sq(hAccuracy) + sq(vAccuracy));
               // long hMSL = this->unpack_int32(16);
-              //unsigned long hAcc = (unsigned long)this->unpack_int32(20);
-              //unsigned long vAcc = (unsigned long)this->unpack_int32(24);                            
+              // unsigned long hAcc = (unsigned long)this->unpack_int32(20);
+              // unsigned long vAcc = (unsigned long)this->unpack_int32(24);                            
               if (verbose) {
                 CONSOLE.print("UBX-NAV-HPPOSLLH ");
                 CONSOLE.print("lon=");
@@ -517,7 +517,7 @@ void UBLOX::dispatchMessage() {
                 bool health = ((sigFlags & 3) == 1);                                                    
                 if (health){       // signal is healthy               
                   if (prUsed){     // pseudorange has been used (indicates satellites will be also used for carrier correction)
-                  //if (cno > 0){  // signal has some strength (carriar-to-noise)
+                  // if (cno > 0){  // signal has some strength (carriar-to-noise)
                     healthycnt++;                   
                     if (crCorrUsed){  // Carrier range corrections have been used
                       /*CONSOLE.print(sigFlags);
@@ -665,7 +665,7 @@ long UBLOX::unpack(int offset, int size) {
 void UBLOX::run()
 {
 	if (millis() > solutionTimeout){
-    //CONSOLE.println("UBLOX::solutionTimeout");
+    // CONSOLE.println("UBLOX::solutionTimeout");
     solution = SOL_INVALID;
     solutionTimeout = millis() + 1000;
     solutionAvail = true;

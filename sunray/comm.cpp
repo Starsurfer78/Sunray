@@ -63,8 +63,8 @@ void cmdTuneParam(){
   int lastCommaIdx = 0;
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    //Serial.print("ch=");
-    //Serial.println(ch);
+    // Serial.print("ch=");
+    // Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
       float floatValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();
       if (counter == 1){                            
@@ -131,8 +131,8 @@ void cmdControl(){
   float wayPerc = -1;  
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    //Serial.print("ch=");
-    //Serial.println(ch);
+    // Serial.print("ch=");
+    // Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
       int intValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toInt();
       float floatValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();
@@ -196,8 +196,8 @@ void cmdMotor(){
   float angular=0;
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    //Serial.print("ch=");
-    //Serial.println(ch);
+    // Serial.print("ch=");
+    // Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
       float value = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();
       if (counter == 1){                            

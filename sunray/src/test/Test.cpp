@@ -24,7 +24,7 @@ MotorFaultTest motorFaultTest;
 SessionTest sessionTest;
 BumperTest bumperTest;
 Tester tester;
-//Test &currentTest = obstacleAvoidanceTest; 
+// Test &currentTest = obstacleAvoidanceTest; 
 Test &currentTest = bumperTest;
 PathFinderTest pathFinderTest;
 
@@ -65,9 +65,9 @@ void Test::end(){
 void Test::speak(String text){
   #ifdef __linux__
     Process p;
-    //String s = "say '" + text + "'";  // sudo apt-get install gnustep-gui-runtime
-    //String s = "echo '" + text + "' | festival --tts";  // sudo apt-get install festival
-    //String s = "spd-say '" + text + "'";  // sudo apt-get install speech-dispatcher    
+    // String s = "say '" + text + "'";	// sudo apt-get install gnustep-gui-runtime
+    // String s = "echo '" + text + "' | festival --tts";	// sudo apt-get install festival
+    // String s = "spd-say '" + text + "'";	// sudo apt-get install speech-dispatcher    
     String s = "espeak -s 150 -p 30 -vmb-en1 '" + text + "'";  // sudo apt-get install espeak, sudo apt-get install mbrola-en1    
     p.runShellCommand(s+ " &");    
   #endif
@@ -80,7 +80,7 @@ String ObstacleAvoidanceTest::getOperationName(){
 }
 
 void ObstacleAvoidanceTest::begin(){  
-  //speak("Obstacle Avoidance Test");
+  // speak("Obstacle Avoidance Test");
   targetX = targetY = 99999;
   imuFailureTime = millis() + 600000;
 }
@@ -136,7 +136,7 @@ String MotorFaultTest::getOperationName(){
 }
 
 void MotorFaultTest::begin(){  
-  //speak("Motor Fault Test");  
+  // speak("Motor Fault Test");  
   nextFaultTime = millis() + 60000;
   speak("Motor Fault Test");
 }
@@ -257,8 +257,8 @@ void BumperTest::end(){
 }
  
 void BumperTest::run(){    
-  //CONSOLE.println(maps.wayMode);
-  //if ((stateOp == OP_MOW) 
+  // CONSOLE.println(maps.wayMode);
+  // if ((stateOp == OP_MOW) 
   if (maps.wayMode != WAY_DOCK){
     int gridx = robotDriver.simX; // convert into meter-grid
     int gridy = robotDriver.simY; // convert into meter-grid
@@ -288,7 +288,7 @@ void BumperTest::run(){
 // ----------------------------------
 
 void Tester::begin(){
-  //currentTest.begin();
+  // currentTest.begin();
   nextTestTime = 0;
 }
 
@@ -297,16 +297,16 @@ void Tester::run(){
   // if you want to run a test only at certain time intervals...
 
   /*if (millis() > nextTestTime){
-    //maps.generateRandomMap();    
-    //pathFinderTest.runPerimeterPathTest();
+    // maps.generateRandomMap();    
+    // pathFinderTest.runPerimeterPathTest();
     
-    //pathFinderTest.runRandomPathTest();
+    // pathFinderTest.runRandomPathTest();
     nextTestTime = millis() + 20000;         
   }*/
 
 
   // to run a test permanently...
-  //currentTest.run();
+  // currentTest.run();
   
   
   /*if (currentTest.started){

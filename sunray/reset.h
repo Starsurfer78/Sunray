@@ -18,8 +18,7 @@ void logResetCause();
 // Include new memory monitoring system
 #include "src/memory_monitor.h"
 
-// Legacy function - use MemoryMonitor::getFreeMemory() instead
-int freeMemory() __attribute__((deprecated("Use MemoryMonitor::getFreeMemory() instead")));
+
 
 #ifndef __linux__
   extern "C" char* sbrk(int incr);

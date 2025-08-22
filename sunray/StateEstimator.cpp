@@ -87,10 +87,10 @@ bool startIMU(bool forceIMU){
      if (counter > 5){    
        // no I2C recovery possible - this should not happen (I2C module error)
        CONSOLE.println("ERROR IMU not found");
-       //stateSensor = SENS_IMU_TIMEOUT;
+       // stateSensor = SENS_IMU_TIMEOUT;
        activeOp->onImuError();
-       //setOperation(OP_ERROR);      
-       //buzzer.sound(SND_STUCK, true);            
+       // setOperation(OP_ERROR);      
+       // buzzer.sound(SND_STUCK, true);            
        return false;
      }
      watchdogReset();          
@@ -108,11 +108,11 @@ bool startIMU(bool forceIMU){
     delay(1000);    
     counter++;
     if (counter > 5){
-      //stateSensor = SENS_IMU_TIMEOUT;
+      // stateSensor = SENS_IMU_TIMEOUT;
       activeOp->onImuError();
       Logger.event(EVT_ERROR_IMU_NOT_CONNECTED);    
-      //setOperation(OP_ERROR);      
-      //buzzer.sound(SND_STUCK, true);            
+      // setOperation(OP_ERROR);      
+      // buzzer.sound(SND_STUCK, true);            
       return false;
     }
     watchdogReset();       
@@ -154,8 +154,8 @@ void readIMU(){
   // check time for I2C access : if too long, there's an I2C issue and we need to restart I2C bus...
   unsigned long duration = millis() - startTime;    
   if (avail) imuDataTimeout = millis() + 10000; // reset IMU data timeout, if IMU data available
-  //CONSOLE.print("duration:");
-  //CONSOLE.println(duration);  
+  // CONSOLE.print("duration:");
+  // CONSOLE.println(duration);  
   if ((duration > 60) || (millis() > imuDataTimeout)) {
     if (millis() > imuDataTimeout){
       CONSOLE.print("ERROR IMU data timeout: ");
@@ -176,7 +176,7 @@ void readIMU(){
   } 
   
   if (avail) {        
-    //CONSOLE.println("fifoAvailable");
+    // CONSOLE.println("fifoAvailable");
     // Use dmpUpdateFifo to update the ax, gx, mx, etc. values
     #ifdef ENABLE_TILT_DETECTION
       rollChange += (imuDriver.roll-stateRoll);
@@ -185,27 +185,27 @@ void readIMU(){
       pitchChange = 0.95 * pitchChange;
       statePitch = imuDriver.pitch;
       stateRoll = imuDriver.roll;        
-      //CONSOLE.print(rollChange/PI*180.0);
-      //CONSOLE.print(",");
-      //CONSOLE.println(pitchChange/PI*180.0);
+      // CONSOLE.print(rollChange/PI*180.0);
+      // CONSOLE.print(",");
+      // CONSOLE.println(pitchChange/PI*180.0);
       if ( (fabs(scalePI(imuDriver.roll)) > 60.0/180.0*PI) || (fabs(scalePI(imuDriver.pitch)) > 100.0/180.0*PI)
             || (fabs(rollChange) > 30.0/180.0*PI) || (fabs(pitchChange) > 60.0/180.0*PI)   )  {
         dumpImuTilt();
         activeOp->onImuTilt();
-        //stateSensor = SENS_IMU_TILT;
-        //setOperation(OP_ERROR);
+        // stateSensor = SENS_IMU_TILT;
+        // setOperation(OP_ERROR);
       }           
     #endif
     motor.robotPitch = scalePI(imuDriver.pitch);
     imuDriver.yaw = scalePI(imuDriver.yaw);
-    //CONSOLE.println(imuDriver.yaw / PI * 180.0);
+    // CONSOLE.println(imuDriver.yaw / PI * 180.0);
     lastIMUYaw = scalePI(lastIMUYaw);
     lastIMUYaw = scalePIangles(lastIMUYaw, imuDriver.yaw);
     stateDeltaIMU = -scalePI ( distancePI(imuDriver.yaw, lastIMUYaw) );  
-    //CONSOLE.print(imuDriver.yaw);
-    //CONSOLE.print(",");
-    //CONSOLE.print(stateDeltaIMU/PI*180.0);
-    //CONSOLE.println();
+    // CONSOLE.print(imuDriver.yaw);
+    // CONSOLE.print(",");
+    // CONSOLE.print(stateDeltaIMU/PI*180.0);
+    // CONSOLE.println();
     lastIMUYaw = imuDriver.yaw;      
     imuDataTimeout = millis() + 10000;         
   }     
@@ -317,7 +317,7 @@ void computeRobotState(){
           float dockX;
           float dockY;
           float dockDelta;
-          //int dockPointsIdx = maps.dockPoints.numPoints-1; 
+          // int dockPointsIdx = maps.dockPoints.numPoints-1; 
           int dockPointsIdx = maps.dockPointsIdx;
           if (maps.getDockingPos(dockX, dockY, dockDelta, dockPointsIdx)){
             // transform robot-in-reflector-tag-frame into world frame
@@ -325,8 +325,8 @@ void computeRobotState(){
             if (!maps.shouldDock) robotX = -0.2;  
             if (robotX < 0) {
               // flip robot at marker
-              //robotX *= -1;
-              //robotY *= -1;
+              // robotX *= -1;
+              // robotY *= -1;
             }
             float worldX = dockX + robotX * cos(dockDelta+3.1415) - robotY * sin(dockDelta+3.1415);
             float worldY = dockY + robotX * sin(dockDelta+3.1415) + robotY * cos(dockDelta+3.1415);            
@@ -378,7 +378,7 @@ void computeRobotState(){
   {
     gps.solutionAvail = false;        
     stateGroundSpeed = 0.9 * stateGroundSpeed + 0.1 * abs(gps.groundSpeed);    
-    //CONSOLE.println(stateGroundSpeed);
+    // CONSOLE.println(stateGroundSpeed);
     float distGPS = sqrt( sq(posN-lastPosN)+sq(posE-lastPosE) );
     if ((distGPS > 0.3) || (resetLastPos)){
       if (distGPS > 0.3) {
@@ -397,7 +397,7 @@ void computeRobotState(){
         if ( (fabs(motor.linearSpeedSet) > 0) && (fabs(motor.angularSpeedSet) /PI *180.0 < 45) ) {  
           stateDeltaGPS = scalePI(atan2(posN-lastPosN, posE-lastPosE));    
           if (motor.linearSpeedSet < 0) stateDeltaGPS = scalePI(stateDeltaGPS + PI); // consider if driving reverse
-          //stateDeltaGPS = scalePI(2*PI-gps.heading+PI/2);
+          // stateDeltaGPS = scalePI(2*PI-gps.heading+PI/2);
           float diffDelta = distancePI(stateDelta, stateDeltaGPS);                 
           if (useGPSdelta){
             if (    ((gps.solution == SOL_FIXED) && (maps.useGPSfixForDeltaEstimation ))
@@ -476,23 +476,23 @@ void computeRobotState(){
     stateDeltaSpeedIMU = 0.99 * stateDeltaSpeedIMU + 0.01 * stateDeltaIMU / 0.02; // IMU yaw rotation speed (20ms timestep)
   }
   stateDeltaSpeedWheels = 0.99 * stateDeltaSpeedWheels + 0.01 * deltaOdometry / 0.02; // wheels yaw rotation speed (20ms timestep) 
-  //CONSOLE.println(stateDelta / PI * 180.0);
+  // CONSOLE.println(stateDelta / PI * 180.0);
   stateDeltaIMU = 0;
 
   // compute yaw rotation speed (delta speed)
   stateDeltaSpeed = (stateDelta - stateDeltaLast) / 0.02;  // 20ms timestep
   stateDeltaSpeedLP = stateDeltaSpeedLP * 0.95 + fabs(stateDeltaSpeed) * 0.05;     
   stateDeltaLast = stateDelta;
-  //CONSOLE.println(stateDeltaSpeedLP/PI*180.0);
+  // CONSOLE.println(stateDeltaSpeedLP/PI*180.0);
 
   if (imuDriver.imuFound) {
     // compute difference between IMU yaw rotation speed and wheels yaw rotation speed
     diffIMUWheelYawSpeed = stateDeltaSpeedIMU - stateDeltaSpeedWheels;
     diffIMUWheelYawSpeedLP = diffIMUWheelYawSpeedLP * 0.95 + fabs(diffIMUWheelYawSpeed) * 0.05;  
-    //CONSOLE.println(diffIMUWheelYawSpeedLP/PI*180.0);
-    //CONSOLE.print(stateDeltaSpeedIMU/PI*180.0);
-    //CONSOLE.print(",");
-    //CONSOLE.println(stateDeltaSpeedWheels/PI*180.0);
+    // CONSOLE.println(diffIMUWheelYawSpeedLP/PI*180.0);
+    // CONSOLE.print(stateDeltaSpeedIMU/PI*180.0);
+    // CONSOLE.print(",");
+    // CONSOLE.println(stateDeltaSpeedWheels/PI*180.0);
   }
 
 

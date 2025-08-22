@@ -924,7 +924,7 @@ bool Map::nextPointIsStraight(){
   angleNext = scalePIangles(angleNext, angleCurr);                    
   float diffDelta = distancePI(angleCurr, angleNext);                 
   //CONSOLE.println(fabs(diffDelta)/PI*180.0);
-  return ((fabs(diffDelta)/PI*180.0) < 12); // reduziert von 20° auf 12° für präzisere Kurvenfahrt
+  return ((fabs(diffDelta)/PI*180.0) < 12); // reduced from 20° to 12° for more precise curve driving
 }
 
 
@@ -1231,11 +1231,59 @@ bool Map::checkpoint(float x, float y){
   return true;
 }
 
+// Helper function to calculate minimum distance from point to polygon edge
+float Map::distanceToPolygonEdge(float x, float y, Polygon &polygon) {
+  float minDistance = FLT_MAX;
+  
+  for (int i = 0; i < polygon.numPoints; i++) {
+    int nextIdx = (i + 1) % polygon.numPoints;
+    Point lineStart = polygon.points[i];
+    Point lineEnd = polygon.points[nextIdx];
+    
+    // Calculate distance from point to line segment
+    float A = x - lineStart.x();
+    float B = y - lineStart.y();
+    float C = lineEnd.x() - lineStart.x();
+    float D = lineEnd.y() - lineStart.y();
+    
+    float dot = A * C + B * D;
+    float lenSq = C * C + D * D;
+    
+    if (lenSq == 0) {
+      // Line segment is actually a point
+      float distance = sqrt(A * A + B * B);
+      minDistance = min(minDistance, distance);
+      continue;
+    }
+    
+    float param = dot / lenSq;
+    float xx, yy;
+    
+    if (param < 0) {
+      xx = lineStart.x();
+      yy = lineStart.y();
+    } else if (param > 1) {
+      xx = lineEnd.x();
+      yy = lineEnd.y();
+    } else {
+      xx = lineStart.x() + param * C;
+      yy = lineStart.y() + param * D;
+    }
+    
+    float dx = x - xx;
+    float dy = y - yy;
+    float distance = sqrt(dx * dx + dy * dy);
+    minDistance = min(minDistance, distance);
+  }
+  
+  return minDistance;
+}
+
 // Enhanced pathfinder with safety offsets
 bool Map::isPointSafeForRobot(float x, float y) {
-  #if ENABLE_PATHFINDER_OFFSETS
-    float robotRadius = max(MOWER_SIZE, ROBOT_LENGTH_CM) / 200.0; // Convert to meters, use as radius
-    float safetyOffset = PERIMETER_SAFETY_OFFSET_CM / 100.0;
+  #ifdef ROBOT_WIDTH  // Use new meter-based configuration if available
+    float robotRadius = max(ROBOT_WIDTH, ROBOT_LENGTH) / 2.0; // Use actual robot dimensions
+    float safetyOffset = PERIMETER_SAFETY_OFFSET;
     
     // Check perimeter with safety offset
     Point testPoint;
@@ -1255,6 +1303,35 @@ bool Map::isPointSafeForRobot(float x, float y) {
       float checkY = y + checkRadius * sin(angle);
       if (!checkpoint(checkX, checkY)) {
         return false; // Robot would collide at this position
+      }
+    }
+    
+    // Check exclusion zones with safety offset
+    testPoint.setXY(x, y);
+    float exclusionCheckRadius = robotRadius + EXCLUSION_SAFETY_OFFSET;
+    for (int i = 0; i < maps.exclusions.numPolygons; i++) {
+      for (float angle = 0; angle < 2 * PI; angle += PI/4) {
+        float checkX = x + exclusionCheckRadius * cos(angle);
+        float checkY = y + exclusionCheckRadius * sin(angle);
+        Point checkPoint;
+        checkPoint.setXY(checkX, checkY);
+        if (maps.pointIsInsidePolygon(maps.exclusions.polygons[i], checkPoint)) {
+          return false; // Robot would enter exclusion zone
+        }
+      }
+    }
+    
+    // Check obstacles with safety offset
+    float obstacleCheckRadius = robotRadius + OBSTACLE_SAFETY_OFFSET;
+    for (int i = 0; i < obstacles.numPolygons; i++) {
+      for (float angle = 0; angle < 2 * PI; angle += PI/4) {
+        float checkX = x + obstacleCheckRadius * cos(angle);
+        float checkY = y + obstacleCheckRadius * sin(angle);
+        Point checkPoint;
+        checkPoint.setXY(checkX, checkY);
+        if (maps.pointIsInsidePolygon(obstacles.polygons[i], checkPoint)) {
+          return false; // Robot would collide with obstacle
+        }
       }
     }
     

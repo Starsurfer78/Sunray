@@ -24,11 +24,11 @@ GnssData::~GnssData(void)
 
 void GnssData::Init()
 {
-  //Date
+  // Date
   year = 0;
   month = 0;
   day = 0;
-  //Time
+  // Time
   hour = 0;
   minute = 0;
   second = 0;
