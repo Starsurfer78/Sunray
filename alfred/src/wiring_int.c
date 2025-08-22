@@ -18,6 +18,9 @@
  */
 
 #include "Arduino.h"
+#include <unistd.h>  // for usleep
+#include <pthread.h> // for pthread_setname_np
+#include <stdint.h>  // for intptr_t
 
 #define _BV(a) (1 << (a))
 
@@ -33,7 +36,8 @@ static volatile uint64_t _pin_isr_reg = 0;
 static volatile uint64_t _pin_isr_last = 0;
 
 void *isr_executor_task(void *isr_num){
-    isr_handler_t *handler = &isr_handlers[*((int*)isr_num)];
+    int pin = (int)(intptr_t)isr_num;
+    isr_handler_t *handler = &isr_handlers[pin];
     handler->fn();
     pthread_exit(NULL);
 }
@@ -56,9 +60,9 @@ void *_isr_check_task(void *arg __attribute__((unused))){
                 changed &= ~_BV(i);
                 isr_handler_t *handler = &isr_handlers[i];
                 if((state & _BV(i)) == 0 && (handler->mode == FALLING || handler->mode == CHANGE) && handler->fn) {
-                    thread_create(isr_executor_task, (void *)i);
+                    thread_create(isr_executor_task, (void *)(intptr_t)i);
                 } else if((state & _BV(i)) != 0 && (handler->mode == RISING || handler->mode == CHANGE) && handler->fn) {
-                    thread_create(isr_executor_task, (void *)i);
+                    thread_create(isr_executor_task, (void *)(intptr_t)i);
                 }
             }
         }
