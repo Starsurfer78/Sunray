@@ -112,7 +112,15 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define FREEWHEEL_IS_AT_BACKSIDE   false   // default Ardumower: true   (change to false, if your freewheel is at frontside) - this is used for obstacle avoidance
 #define WHEEL_BASE_CM         39         // wheel-to-wheel distance (cm)        
 #define WHEEL_DIAMETER        205        // wheel diameter (mm)                 
-#define MOWER_SIZE            60         // mower / chassis size / length in cm
+#define MOWER_SIZE            60         // mower / chassis width in cm
+
+// ------ pathfinder safety offsets (feature flag OFF by default) ------
+#define ENABLE_PATHFINDER_OFFSETS   false // Feature flag - default OFF for safety
+// Note: ROBOT_WIDTH_CM uses existing MOWER_SIZE definition to avoid redundancy
+#define ROBOT_LENGTH_CM             80    // Robot length for path planning
+#define PERIMETER_SAFETY_OFFSET_CM  20    // Safety distance from perimeter (cm)
+#define EXCLUSION_SAFETY_OFFSET_CM  30    // Safety distance from exclusions (cm)
+#define PATH_SMOOTHING_ENABLED      true  // Enable path smoothing
 
 //#define ENABLE_ODOMETRY_ERROR_DETECTION  true    // use this to detect odometry erros
 #define ENABLE_ODOMETRY_ERROR_DETECTION  false
@@ -223,6 +231,8 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 // --------- SimpleWifiRestart integration (experimental) ---------------------------------
 //#define ENABLE_SIMPLE_WIFI_RESTART false  // enable SimpleWifiRestart for automatic WiFi recovery (default: disabled)
+#define WIFI_RESTART_CHECK_INTERVAL 30000  // check interval (ms) for WiFi status (default: 30000)
+#define WIFI_RESTART_MAX_FAILURES 3  // max. consecutive failures before restart (default: 3)
 #define WIFI_RESTART_DELAY  10000  // delay (ms) before restarting WiFi (default: 10000)
 #define WIFI_RESTART_MAX_RETRIES  3  // max. number of retries to restart WiFi (default: 3)
 
@@ -419,14 +429,14 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 // ---- path tracking -----------------------------------
 
 // below this robot-to-target distance (m) a target is considered as reached
-#define TARGET_REACHED_TOLERANCE 0.1
+#define TARGET_REACHED_TOLERANCE 0.05
 
 // stanley control for path tracking - determines gain how fast to correct for lateral path errors
 #define STANLEY_CONTROL_P_NORMAL  1.1   // 3.0 for path tracking control (angular gain) when mowing
-#define STANLEY_CONTROL_K_NORMAL  0.1   // 1.0 for path tracking control (lateral gain) when mowing
+#define STANLEY_CONTROL_K_NORMAL  0.7   // 1.0 for path tracking control (lateral gain) when mowing - erhöht für bessere Pfadverfolgung auf kurzen Strecken
 
 #define STANLEY_CONTROL_P_SLOW    1.1   // 1.0 for path tracking control (angular gain) when docking tracking
-#define STANLEY_CONTROL_K_SLOW    0.1   // 0.2 for path tracking control (lateral gain) when docking tracking
+#define STANLEY_CONTROL_K_SLOW    0.3   // 0.2 for path tracking control (lateral gain) when docking tracking - erhöht für konsistentere Kurvenfahrt
 
 
 // ----- other options --------------------------------------------

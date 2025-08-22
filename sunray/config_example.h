@@ -228,6 +228,12 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define WIFI_SSID "myssid"            // choose WiFi network ID
 #define WIFI_PASS "mypassword"      // choose WiFi network password
 
+// --------- SimpleWifiRestart integration (experimental) ---------------------------------
+//#define ENABLE_SIMPLE_WIFI_RESTART false  // enable SimpleWifiRestart for automatic WiFi recovery (default: disabled)
+#define WIFI_RESTART_CHECK_INTERVAL 30000  // WiFi status check interval in ms (default: 30000)
+#define WIFI_RESTART_MAX_FAILURES 3       // max consecutive failures before restart (default: 3)
+#define WIFI_RESTART_DELAY 10000          // delay in ms before restarting WiFi (default: 10000)
+
 // client (app) --->  server (robot)
 #define ENABLE_SERVER true          // must be enabled if robot should act as server (recommended)
 //#define ENABLE_SERVER false           // must be disabled if robot should act as client (requires external relay server)

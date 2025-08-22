@@ -914,7 +914,7 @@ bool Map::nextPointIsStraight(){
   angleNext = scalePIangles(angleNext, angleCurr);                    
   float diffDelta = distancePI(angleCurr, angleNext);                 
   //CONSOLE.println(fabs(diffDelta)/PI*180.0);
-  return ((fabs(diffDelta)/PI*180.0) < 20);
+  return ((fabs(diffDelta)/PI*180.0) < 12); // reduziert von 20° auf 12° für präzisere Kurvenfahrt
 }
 
 
@@ -1219,6 +1219,39 @@ bool Map::checkpoint(float x, float y){
   }  
 
   return true;
+}
+
+// Enhanced pathfinder with safety offsets
+bool Map::isPointSafeForRobot(float x, float y) {
+  #if ENABLE_PATHFINDER_OFFSETS
+    float robotRadius = max(MOWER_SIZE, ROBOT_LENGTH_CM) / 200.0; // Convert to meters, use as radius
+    float safetyOffset = PERIMETER_SAFETY_OFFSET_CM / 100.0;
+    
+    // Check perimeter with safety offset
+    Point testPoint;
+    testPoint.setXY(x, y);
+    
+    // Simple distance check to perimeter (basic implementation)
+    // For now, use existing checkpoint and add buffer logic
+    if (!checkpoint(x, y)) {
+      return false; // Point is already outside safe area
+    }
+    
+    // Check if point is too close to perimeter edges
+    // This is a simplified implementation - in production, proper distance calculation would be needed
+    float checkRadius = robotRadius + safetyOffset;
+    for (float angle = 0; angle < 2 * PI; angle += PI/8) {
+      float checkX = x + checkRadius * cos(angle);
+      float checkY = y + checkRadius * sin(angle);
+      if (!checkpoint(checkX, checkY)) {
+        return false; // Robot would collide at this position
+      }
+    }
+    
+    return true;
+  #else
+    return checkpoint(x, y); // Original behavior
+  #endif
 }
 
 // find start point for path finder on line from src to dst
