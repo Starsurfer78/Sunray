@@ -93,7 +93,8 @@ class NodeList  // owns nodes!
 {
   public:
     Node *nodes;    
-    short numNodes;     
+    short numNodes;
+    bool stackAllocated; // Track if nodes were allocated using stack allocator
     NodeList();
     NodeList(short aNumNodes);
     ~NodeList();
@@ -257,6 +258,7 @@ class Map
     bool initializePathfinding(Point &src, Point &dst);
     Node* processPathfindingNodes(Point &src, Point &dst, unsigned long startTime);
     bool reconstructPath(Node* resultNode, Point &dst);
+    void smoothPath(); // Smooth path by removing unnecessary waypoints
 };
 
 
