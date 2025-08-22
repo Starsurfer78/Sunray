@@ -12,7 +12,7 @@ project(sunray)
 SET(FIRMWARE_PATH ${CMAKE_SOURCE_DIR}/../sunray)
 
 set(CMAKE_CXX_STANDARD 14)
-SET(EXCLUDE_REGEX "agcm4|due|esp|libb64|src/sunray/src")
+SET(EXCLUDE_REGEX "agcm4|due|esp")
 
 
 if(WIN32)
