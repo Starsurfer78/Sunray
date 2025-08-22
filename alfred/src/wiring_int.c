@@ -82,7 +82,7 @@ void attachInterrupt(uint8_t pin, void (*userFunc)(void), int mode) {
         _pin_isr_last |= (digitalRead(pin) << pin);
         _pin_isr_reg |= _BV(pin);
         if(start && pthread_create(&_pin_isr_thread, NULL, _isr_check_task, NULL) == 0){
-            pthread_setname_np(_pin_isr_thread, "arduino-isr");
+            thread_set_name(_pin_isr_thread, "arduino-isr");
             pthread_detach(_pin_isr_thread);
         }
     }
