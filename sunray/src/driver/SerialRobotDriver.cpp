@@ -37,6 +37,13 @@ void SerialRobotDriver::begin(){
   chargeVoltage = 0;
   chargeCurrent = 0;  
   batteryVoltage = 28;
+  // Initialize battery voltage smoothing
+  for (int i = 0; i < VOLTAGE_BUFFER_SIZE; i++) {
+    voltageBuffer[i] = 28.0; // Initialize with default voltage
+  }
+  voltageBufferIndex = 0;
+  voltageBufferCount = 0;
+  smoothedBatteryVoltage = 28.0;
   cpuTemp = 30;
   mowCurr = 0;
   motorLeftCurr = 0;
@@ -264,6 +271,38 @@ void SerialRobotDriver::updateWifiConnectionState(){
   #endif
 }
 
+// Battery voltage smoothing implementation
+void SerialRobotDriver::updateBatteryVoltageSmoothing(float newVoltage) {
+  // Add new voltage to circular buffer
+  voltageBuffer[voltageBufferIndex] = newVoltage;
+  voltageBufferIndex = (voltageBufferIndex + 1) % VOLTAGE_BUFFER_SIZE;
+  
+  // Track how many values we have (up to buffer size)
+  if (voltageBufferCount < VOLTAGE_BUFFER_SIZE) {
+    voltageBufferCount++;
+  }
+  
+  // Calculate moving average
+  float sum = 0.0;
+  for (int i = 0; i < voltageBufferCount; i++) {
+    sum += voltageBuffer[i];
+  }
+  smoothedBatteryVoltage = sum / voltageBufferCount;
+  
+  #ifdef DEBUG_SERIAL_ROBOT
+    CONSOLE.print("Battery voltage: raw=");
+    CONSOLE.print(newVoltage);
+    CONSOLE.print("V, smoothed=");
+    CONSOLE.print(smoothedBatteryVoltage);
+    CONSOLE.print("V, samples=");
+    CONSOLE.println(voltageBufferCount);
+  #endif
+}
+
+float SerialRobotDriver::getSmoothedBatteryVoltage() {
+  return smoothedBatteryVoltage;
+}
+
 // send serial request to MCU with enhanced error handling
 void SerialRobotDriver::sendRequest(String s){
   // Check for communication timeout
@@ -478,6 +517,7 @@ void SerialRobotDriver::summaryResponse(){
       switch(counter) {
         case 1:
           batteryVoltage = floatValue;
+          updateBatteryVoltageSmoothing(floatValue);
           break;
         case 2:
           chargeVoltage = floatValue;
@@ -991,7 +1031,8 @@ float SerialBatteryDriver::getBatteryVoltage(){
       return 28;      
     }
   #endif         
-  return serialRobot.batteryVoltage;
+  // Return smoothed battery voltage for more stable readings
+  return serialRobot.getSmoothedBatteryVoltage();
 }
 
 float SerialBatteryDriver::getChargeVoltage(){

@@ -35,6 +35,12 @@ class SerialRobotDriver: public RobotDriver {
     float batteryVoltage;
     float chargeVoltage;
     float chargeCurrent;
+    // Battery voltage smoothing variables
+    static const int VOLTAGE_BUFFER_SIZE = 10;
+    float voltageBuffer[VOLTAGE_BUFFER_SIZE];
+    int voltageBufferIndex;
+    int voltageBufferCount;
+    float smoothedBatteryVoltage;
     float mowCurr;
     float motorLeftCurr;
     float motorRightCurr;
@@ -57,6 +63,8 @@ class SerialRobotDriver: public RobotDriver {
     void updatePanelLEDs();
     void updateCpuTemperature();
     void updateWifiConnectionState();
+    void updateBatteryVoltageSmoothing(float newVoltage);
+    float getSmoothedBatteryVoltage();
     bool setLedState(int ledNumber, bool greenState, bool redState);
     bool setFanPowerState(bool state);
     bool setImuPowerState(bool state);
