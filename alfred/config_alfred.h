@@ -115,7 +115,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define MOWER_SIZE            60         // mower / chassis width in cm
 
 // ------ pathfinder safety offsets (feature flag OFF by default) ------
-#define ENABLE_PATHFINDER_OFFSETS   false // Feature flag - default OFF for safety
+#define ENABLE_PATHFINDER_OFFSETS   false  // Feature flag - default OFF for safety
 // Note: ROBOT_WIDTH_CM uses existing MOWER_SIZE definition to avoid redundancy
 #define ROBOT_LENGTH_CM             80    // Robot length for path planning
 #define PERIMETER_SAFETY_OFFSET_CM  20    // Safety distance from perimeter (cm)
@@ -161,15 +161,15 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 #define MOTOR_OVERLOAD_SPEED  0.1    // speed (m/s) to use at motor overload
 
-//#define USE_LINEAR_SPEED_RAMP  true      // use a speed ramp for the linear speed
-#define USE_LINEAR_SPEED_RAMP  false      // do not use a speed ramp 
+#define USE_LINEAR_SPEED_RAMP  true      // use a speed ramp for the linear speed - aktiviert für sanftere Bewegungen
+//#define USE_LINEAR_SPEED_RAMP  false      // do not use a speed ramp 
 
 // motor speed control (PID coefficients) - these values are tuned for Ardumower motors
 // general information about PID controllers: https://wiki.ardumower.de/index.php?title=PID_control
 #define MOTOR_PID_LP     0.0    // encoder low-pass filter (use for low encoder tickcount - use zero to disable)
-#define MOTOR_PID_KP     0.5    // 0.5 do not change 2.0 (for non-Ardumower motors or if the motor speed control is too fast you may try: KP=1.0, KI=0, KD=0)
-#define MOTOR_PID_KI     0.01   // 0.01 do not change 0.03
-#define MOTOR_PID_KD     0.01   // 0.01 do not change 0.03
+#define MOTOR_PID_KP     2.0    // 2.0 standard Ardumower motor PID values for stable control
+#define MOTOR_PID_KI     0.03   // 0.03 improved integral gain for better steady-state accuracy
+#define MOTOR_PID_KD     0.03   // 0.03 improved derivative gain for damping oscillations
 #define MOTOR_PID_LIMIT  255    // output limit - do not change 255
 #define MOTOR_PID_RAMP   0      // output derivative limit - do not change 0
 
@@ -433,7 +433,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 // stanley control for path tracking - determines gain how fast to correct for lateral path errors
 #define STANLEY_CONTROL_P_NORMAL  1.1   // 3.0 for path tracking control (angular gain) when mowing
-#define STANLEY_CONTROL_K_NORMAL  0.7   // 1.0 for path tracking control (lateral gain) when mowing - erhöht für bessere Pfadverfolgung auf kurzen Strecken
+#define STANLEY_CONTROL_K_NORMAL  0.5   // 0.5 for path tracking control (lateral gain) when mowing - reduziert um Überschwingen zu vermeiden
 
 #define STANLEY_CONTROL_P_SLOW    1.1   // 1.0 for path tracking control (angular gain) when docking tracking
 #define STANLEY_CONTROL_K_SLOW    0.3   // 0.2 for path tracking control (lateral gain) when docking tracking - erhöht für konsistentere Kurvenfahrt
