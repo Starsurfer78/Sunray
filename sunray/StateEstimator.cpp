@@ -230,8 +230,7 @@ void applyAntennaOffsetCorrection(float &posN, float &posE, float robotYaw) {
       #ifdef ENABLE_3D_ORIENTATION
         if (ENABLE_3D_ORIENTATION && USE_ROTATION_MATRIX) {
           // Use 3D rotation matrix for precise correction on tilted robot
-          RotationMatrix rotMatrix;
-          calculateRotationMatrix(stateRoll, statePitch, robotYaw, rotMatrix);
+          RotationMatrix rotMatrix = calculateRotationMatrix(stateRoll, statePitch, robotYaw);
           
           // Transform antenna offset from robot frame to world frame
           float offsetRobot[3] = {offsetX_m, offsetY_m, offsetZ_m};
