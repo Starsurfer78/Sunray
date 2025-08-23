@@ -217,6 +217,28 @@ void resetImuTimeout(){
 }
 
 
+// apply GPS antenna offset correction to GPS coordinates
+// transforms GPS antenna position to robot center position
+void applyAntennaOffsetCorrection(float &posN, float &posE, float robotYaw) {
+  #ifdef ENABLE_ANTENNA_OFFSET
+    if (ENABLE_ANTENNA_OFFSET) {
+      // Convert offset from cm to meters
+      float offsetX_m = GPS_ANTENNA_OFFSET_X_CM / 100.0;
+      float offsetY_m = GPS_ANTENNA_OFFSET_Y_CM / 100.0;
+      
+      // Apply 2D rotation based on robot yaw (stateDelta)
+      // GPS antenna offset in robot frame -> world frame
+      float offsetN = offsetX_m * cos(robotYaw) - offsetY_m * sin(robotYaw);
+      float offsetE = offsetX_m * sin(robotYaw) + offsetY_m * cos(robotYaw);
+      
+      // Correct GPS position: subtract antenna offset to get robot center
+      posN -= offsetN;
+      posE -= offsetE;
+    }
+  #endif
+}
+
+
 // compute robot state (x,y,delta)
 // uses complementary filter ( https://gunjanpatel.wordpress.com/2016/07/07/complementary-filter-design/ )
 // to fusion GPS heading (long-term) and IMU heading (short-term)
@@ -367,7 +389,10 @@ void computeRobotState(){
   } else {
     posN = gps.relPosN;  
     posE = gps.relPosE;     
-  }   
+  }
+  
+  // Apply GPS antenna offset correction to get robot center position
+  applyAntennaOffsetCorrection(posN, posE, stateDelta);   
 
   if (fabs(motor.linearSpeedSet) < 0.001){       
     resetLastPos = true;

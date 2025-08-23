@@ -110,17 +110,10 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 // NOTE: if using non-default Ardumower chassis and your freewheel is at frontside (gear motors at backside), have may have to swap motor cables, 
 // more info here: https://wiki.ardumower.de/index.php?title=Ardumower_Chassis_%27mountain_mod%27)
 #define FREEWHEEL_IS_AT_BACKSIDE   false   // default Ardumower: true   (change to false, if your freewheel is at frontside) - this is used for obstacle avoidance
-#define WHEEL_BASE_CM         39         // wheel-to-wheel distance (cm)        
+#define WHEEL_BASE_CM         38         // wheel-to-wheel distance (cm)        
 #define WHEEL_DIAMETER        205        // wheel diameter (mm)                 
-#define MOWER_SIZE            60         // mower / chassis width in cm
+// NOTE: MOWER_SIZE removed - use ROBOT_WIDTH (line 436) for robot dimensions in meters
 
-// ------ pathfinder safety offsets (feature flag OFF by default) ------
-#define ENABLE_PATHFINDER_OFFSETS   false  // Feature flag - default OFF for safety
-// Note: ROBOT_WIDTH_CM uses existing MOWER_SIZE definition to avoid redundancy
-#define ROBOT_LENGTH_CM             80    // Robot length for path planning
-#define PERIMETER_SAFETY_OFFSET_CM  20    // Safety distance from perimeter (cm)
-#define EXCLUSION_SAFETY_OFFSET_CM  30    // Safety distance from exclusions (cm)
-#define PATH_SMOOTHING_ENABLED      true  // Enable path smoothing
 
 //#define ENABLE_ODOMETRY_ERROR_DETECTION  true    // use this to detect odometry erros
 #define ENABLE_ODOMETRY_ERROR_DETECTION  false
@@ -167,9 +160,9 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 // motor speed control (PID coefficients) - these values are tuned for Ardumower motors
 // general information about PID controllers: https://wiki.ardumower.de/index.php?title=PID_control
 #define MOTOR_PID_LP     0.0    // encoder low-pass filter (use for low encoder tickcount - use zero to disable)
-#define MOTOR_PID_KP     2.0    // 2.0 standard Ardumower motor PID values for stable control
-#define MOTOR_PID_KI     0.03   // 0.03 improved integral gain for better steady-state accuracy
-#define MOTOR_PID_KD     0.03   // 0.03 improved derivative gain for damping oscillations
+#define MOTOR_PID_KP     0.5    // 0.5 do not change 2.0 (for non-Ardumower motors or if the motor speed control is too fast you may try: KP=1.0, KI=0, KD=0)
+#define MOTOR_PID_KI     0.01   // 0.01 do not change 0.03
+#define MOTOR_PID_KD     0.01   // 0.01 do not change 0.03
 #define MOTOR_PID_LIMIT  255    // output limit - do not change 255
 #define MOTOR_PID_RAMP   0      // output derivative limit - do not change 0
 
@@ -191,7 +184,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 #define MOW_FAULT_CURRENT 8.0       // mowing motor fault current (amps)
 #define MOW_TOO_LOW_CURRENT 0.005   // mowing motor too low current (amps) , set to zero (0) to disable
-#define MOW_OVERLOAD_CURRENT 2.0    // mowing motor overload current (amps)
+#define MOW_OVERLOAD_CURRENT 2.5    // mowing motor overload current (amps)
 
 // should the direction of mowing motor toggle each start? (yes: true, no: false)
 #define MOW_TOGGLE_DIR       true
@@ -376,6 +369,14 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define CPG_CONFIG_FILTER_NCNOTHRS 0   // C/N0 Threshold #SVs: 10 (robust), 6 (less robust)
 #define CPG_CONFIG_FILTER_CNOTHRS  0   // 30 dbHz (robust), 13 dbHz (less robust)
 
+// ------ GPS antenna offset correction -------------------------
+// GPS antenna position relative to robot center (in cm)
+// Positive X = forward, Positive Y = left, Positive Z = up
+#define ENABLE_ANTENNA_OFFSET true      // enable GPS antenna offset correction
+#define GPS_ANTENNA_OFFSET_X_CM  -20    // antenna offset X (cm) - negative = behind center
+#define GPS_ANTENNA_OFFSET_Y_CM   0     // antenna offset Y (cm) - zero = centered
+#define GPS_ANTENNA_OFFSET_Z_CM   25     // antenna offset Z (cm) - positive = above center
+
 
 // ------ obstacle detection and avoidance  -------------------------
 
@@ -405,8 +406,8 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define DOCKING_STATION true   // use this if docking station available and mower should dock automatically
 //#define DOCKING_STATION false    // mower will just stop after mowing instead of docking automatically 
 
-#define DOCK_IGNORE_GPS false     // use GPS fix in docking station and IMU for GPS float/invalid
-//#define DOCK_IGNORE_GPS true     // ignore GPS fix in docking station and use IMU-only (use this if robot gets false GPS fixes in your docking station)
+//#define DOCK_IGNORE_GPS false     // use GPS fix in docking station and IMU for GPS float/invalid
+#define DOCK_IGNORE_GPS true     // ignore GPS fix in docking station and use IMU-only (use this if robot gets false GPS fixes in your docking station)
 
 #define DOCK_AUTO_START true     // robot will automatically continue mowing after docked automatically
 //#define DOCK_AUTO_START false      // robot will not automatically continue mowing after docked automatically
@@ -421,7 +422,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define DOCK_FRONT_SIDE true    // dock with mower front side (true) or back side (false)? 
 
 //#define DOCK_APRIL_TAG 1         // use visual (april-tag) docking?
-#define DOCK_LINEAR_SPEED 0.1   // linear speed for docking
+#define DOCK_LINEAR_SPEED 0.15   // linear speed for docking
 
 #define DOCK_DETECT_OBSTACLE_IN_DOCK true   // enable obstacle detection in dock?
 
@@ -429,15 +430,22 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 // ---- path tracking -----------------------------------
 
 // below this robot-to-target distance (m) a target is considered as reached
-#define TARGET_REACHED_TOLERANCE 0.05
+#define TARGET_REACHED_TOLERANCE 0.15
 
 // stanley control for path tracking - determines gain how fast to correct for lateral path errors
 #define STANLEY_CONTROL_P_NORMAL  1.1   // 3.0 for path tracking control (angular gain) when mowing
-#define STANLEY_CONTROL_K_NORMAL  0.5   // 0.5 for path tracking control (lateral gain) when mowing - reduziert um Überschwingen zu vermeiden
+#define STANLEY_CONTROL_K_NORMAL  0.1   // 1.0 for path tracking control (lateral gain) when mowing
 
-#define STANLEY_CONTROL_P_SLOW    1.1   // 1.0 for path tracking control (angular gain) when docking tracking
-#define STANLEY_CONTROL_K_SLOW    0.3   // 0.2 for path tracking control (lateral gain) when docking tracking - erhöht für konsistentere Kurvenfahrt
+#define STANLEY_CONTROL_P_SLOW    1.0   // 1.0 for path tracking control (angular gain) when docking tracking
+#define STANLEY_CONTROL_K_SLOW    0.05   // 0.2 for path tracking control (lateral gain) when docking tracking
 
+// ---- pathfinder safety offsets ----------------------------
+// robot dimensions and safety margins for path planning
+#define ROBOT_WIDTH               0.40   // robot width (m) - actual width of the mower
+#define ROBOT_LENGTH              0.64   // robot length (m) - actual length of the mower
+#define PERIMETER_SAFETY_OFFSET   0.35   // safety distance from perimeter (m) - prevents collision with boundary
+#define EXCLUSION_SAFETY_OFFSET   0.25   // safety distance from exclusion zones (m) - prevents entering forbidden areas
+#define OBSTACLE_SAFETY_OFFSET    0.20   // safety distance from detected obstacles (m) - dynamic obstacle avoidance
 
 // ----- other options --------------------------------------------
 
