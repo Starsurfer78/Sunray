@@ -8,6 +8,30 @@
 #include "StateEstimator.h"
 #include "events.h"
 #include "helper.h"
+
+// AllocationHelper template implementations
+template<typename T>
+bool AllocationHelper<T>::validateSize(short size, short maxSize, const char* typeName) {
+  if (size < 0 || size > maxSize) {
+    CONSOLE.print("ERROR ");
+    CONSOLE.print(typeName);
+    CONSOLE.println("::alloc invalid number");
+    return false;
+  }
+  return true;
+}
+
+template<typename T>
+void AllocationHelper<T>::reportAllocError(const char* typeName) {
+  CONSOLE.print("ERROR ");
+  CONSOLE.print(typeName);
+  CONSOLE.println("::alloc out of memory");
+}
+
+// Explicit template instantiations for the types we use
+template struct AllocationHelper<Point>;
+template struct AllocationHelper<Polygon>;
+template struct AllocationHelper<Node>;
 #include "src/memory_guard.h"
 #include "src/stack_allocator.h"
 #include "src/memory_monitor.h"
@@ -22,8 +46,18 @@
 // Legacy memory corruption checking - migrating to MemoryGuard system
 // we check for memory corruptions by storing one additional item in all dynamic arrays and 
 // checking the value of the item during free operation
+// Memory management constants
 #define CHECK_CORRUPT   1
 #define CHECK_ID        MemoryGuard::GUARD_MAGIC_ID
+
+// File format markers
+#define POLYGON_MARKER     0xBB
+#define POLYGON_LIST_MARKER 0xCC
+
+// Allocation limits
+#define MAX_POLYGON_POINTS    10000
+#define MAX_POLYGON_LIST_SIZE  5000
+#define MAX_NODE_LIST_SIZE    20000
 
 Point *CHECK_POINT = (Point*)MemoryGuard::GUARD_MAGIC_PTR;  // using MemoryGuard magic pointer
 
@@ -119,23 +153,34 @@ Polygon::~Polygon(){
 
 bool Polygon::alloc(short aNumPoints){
   if (aNumPoints == numPoints) return true;
-  if ((aNumPoints < 0) || (aNumPoints > 10000)) {
-    CONSOLE.println("ERROR Polygon::alloc invalid number");    
+  if (!AllocationHelper<Point>::validateSize(aNumPoints, MAX_POLYGON_POINTS, "Polygon")) {
     return false;
   }
+  
   // Try stack-based allocation for small arrays first
   bool usedStack = false;
   Point* newPoints = StackAllocator::allocatePoints(aNumPoints+CHECK_CORRUPT, usedStack);
   if (newPoints == NULL) {
-    CONSOLE.println("ERROR Polygon::alloc out of memory");
-    memoryAllocErrors++;
+    AllocationHelper<Point>::reportAllocError("Polygon");
+    GUARD_RECORD_ALLOC_ERROR();
     return false;
   }
   
   if (points != NULL){
-    memcpy(newPoints, points, sizeof(Point)* min(numPoints,aNumPoints) );        
-    if (points[numPoints].px != CHECK_ID) memoryCorruptions++;
-    if (points[numPoints].py != CHECK_ID) memoryCorruptions++;
+    // Optimize: only copy if we have data to preserve
+    short copyCount = min(numPoints, aNumPoints);
+    if (copyCount > 0) {
+      // For small arrays, element-wise copy can be faster due to better cache locality
+      if (copyCount <= 8) {
+        for (short i = 0; i < copyCount; i++) {
+          newPoints[i] = points[i];
+        }
+      } else {
+        memcpy(newPoints, points, sizeof(Point) * copyCount);
+      }
+    }
+    GUARD_CHECK_INT(points[numPoints].px);
+    GUARD_CHECK_INT(points[numPoints].py);
     
     // Properly deallocate old points
     StackAllocator::deallocatePoints(points, stackAllocated);
@@ -155,8 +200,8 @@ bool Polygon::alloc(short aNumPoints){
 
 void Polygon::dealloc(){
   if (points == NULL) return;  
-  if (points[numPoints].px != CHECK_ID) memoryCorruptions++;
-  if (points[numPoints].py != CHECK_ID) memoryCorruptions++;
+  GUARD_CHECK_INT(points[numPoints].px);
+  GUARD_CHECK_INT(points[numPoints].py);
   
   // Use StackAllocator for proper deallocation
   StackAllocator::deallocatePoints(points, stackAllocated);
@@ -191,7 +236,7 @@ long Polygon::crc(){
 
 bool Polygon::read(File &file){
   byte marker = file.read();
-  if (marker != 0xBB){
+  if (marker != POLYGON_MARKER){
     CONSOLE.println("ERROR reading polygon: invalid marker");
     return false;
   }
@@ -206,7 +251,7 @@ bool Polygon::read(File &file){
 }
 
 bool Polygon::write(File &file){
-  if (file.write(0xBB) == 0) return false;  
+  if (file.write(POLYGON_MARKER) == 0) return false;  
   if (file.write((uint8_t*)&numPoints, sizeof(numPoints)) == 0) {
     CONSOLE.println("ERROR writing polygon");
     return false; 
@@ -254,26 +299,44 @@ PolygonList::~PolygonList(){
 
 bool PolygonList::alloc(short aNumPolygons){  
   if (aNumPolygons == numPolygons) return true;
-  if ((aNumPolygons < 0) || (aNumPolygons > 5000)) {
-    CONSOLE.println("ERROR PolygonList::alloc invalid number");    
+  if (!AllocationHelper<Polygon>::validateSize(aNumPolygons, MAX_POLYGON_LIST_SIZE, "PolygonList")) {
     return false;
   }
+  
+  // Use consistent allocation strategy with other classes
   Polygon* newPolygons = new Polygon[aNumPolygons+CHECK_CORRUPT];  
   if (newPolygons == NULL){
-    CONSOLE.println("ERROR PolygonList::alloc out of memory");
-    memoryAllocErrors++;
+    AllocationHelper<Polygon>::reportAllocError("PolygonList");
+    GUARD_RECORD_ALLOC_ERROR();
     return false;
   }
+  
   if (polygons != NULL){
-    memcpy(newPolygons, polygons, sizeof(Polygon)* min(numPolygons, aNumPolygons));        
+    // Optimize: only copy if we have data to preserve
+    short copyCount = min(numPolygons, aNumPolygons);
+    if (copyCount > 0) {
+      // For small arrays, element-wise copy can be faster due to better cache locality
+      if (copyCount <= 4) {
+        for (short i = 0; i < copyCount; i++) {
+          newPolygons[i] = polygons[i];
+        }
+      } else {
+        memcpy(newPolygons, polygons, sizeof(Polygon) * copyCount);
+      }
+    }        
+    
+    // Properly deallocate polygons that won't fit in new array
     if (aNumPolygons < numPolygons){
       for (int i=aNumPolygons; i < numPolygons; i++){
-        //polygons[i].dealloc();        
+        polygons[i].dealloc();        
       }  
     }
-    if (polygons[numPolygons].points != CHECK_POINT) memoryCorruptions++;
+    
+    // Check memory corruption before deallocation
+    GUARD_CHECK_PTR(polygons[numPolygons].points);
     delete[] polygons;    
   } 
+  
   polygons = newPolygons;              
   numPolygons = aNumPolygons;  
   polygons[numPolygons].points = CHECK_POINT;
@@ -285,7 +348,7 @@ void PolygonList::dealloc(){
   for (int i=0; i < numPolygons; i++){
     polygons[i].dealloc();        
   }  
-  if (polygons[numPolygons].points != CHECK_POINT) memoryCorruptions++;
+  GUARD_CHECK_PTR(polygons[numPolygons].points);
   delete[] polygons;
   polygons = NULL;
   numPolygons = 0;  
@@ -318,7 +381,7 @@ long PolygonList::crc(){
 
 bool PolygonList::read(File &file){
   byte marker = file.read();
-  if (marker != 0xCC){
+  if (marker != POLYGON_LIST_MARKER){
     CONSOLE.println("ERROR reading polygon list: invalid marker");
     return false;
   }
@@ -333,7 +396,7 @@ bool PolygonList::read(File &file){
 }
 
 bool PolygonList::write(File &file){
-  if (file.write(0xCC) == 0) {
+  if (file.write(POLYGON_LIST_MARKER) == 0) {
     CONSOLE.println("ERROR writing polygon list marker");
     return false;  
   } 
@@ -400,8 +463,7 @@ NodeList::~NodeList(){
 
 bool NodeList::alloc(short aNumNodes){  
   if (aNumNodes == numNodes) return true;
-  if ((aNumNodes < 0) || (aNumNodes > 20000)) {
-    CONSOLE.println("ERROR NodeList::alloc invalid number");    
+  if (!AllocationHelper<Node>::validateSize(aNumNodes, MAX_NODE_LIST_SIZE, "NodeList")) {
     return false;
   }
   
@@ -411,19 +473,30 @@ bool NodeList::alloc(short aNumNodes){
   Node* newNodes = (Node*)malloc((aNumNodes+CHECK_CORRUPT) * sizeof(Node));
   usedStack = false;
   if (newNodes == NULL) {
-    CONSOLE.println("ERROR NodeList::alloc out of memory");
-    memoryAllocErrors++;
+    AllocationHelper<Node>::reportAllocError("NodeList");
+    GUARD_RECORD_ALLOC_ERROR();
     return false;
   }
   
   if (nodes != NULL){
-    memcpy(newNodes, nodes, sizeof(Node)* min(numNodes, aNumNodes));        
+    // Optimize: only copy if we have data to preserve
+    short copyCount = min(numNodes, aNumNodes);
+    if (copyCount > 0) {
+      // For small arrays, element-wise copy can be faster due to better cache locality
+      if (copyCount <= 6) {
+        for (short i = 0; i < copyCount; i++) {
+          newNodes[i] = nodes[i];
+        }
+      } else {
+        memcpy(newNodes, nodes, sizeof(Node) * copyCount);
+      }
+    }        
     if (aNumNodes < numNodes){
       for (int i=aNumNodes; i < numNodes; i++){
         //nodes[i].dealloc();        
       }  
     }
-    if (nodes[numNodes].point != CHECK_POINT) memoryCorruptions++;
+    GUARD_CHECK_PTR(nodes[numNodes].point);
     
     // Properly deallocate old nodes
      if (stackAllocated) {
@@ -446,7 +519,7 @@ void NodeList::dealloc(){
   for (int i=0; i < numNodes; i++){
     nodes[i].dealloc();        
   }  
-  if (nodes[numNodes].point != CHECK_POINT) memoryCorruptions++;
+  GUARD_CHECK_PTR(nodes[numNodes].point);
   
   // Use StackAllocator for proper deallocation
   if (stackAllocated) {
@@ -534,7 +607,15 @@ void Map::begin(){
   dockPointsIdx = 0;
   shouldDock = false; 
   shouldRetryDock = false; 
-  shouldMow = false;         
+  shouldMow = false;
+  dockRetryCount = 0;
+  lastRetryTime = 0;
+  
+  // Initialize obstacle detection variables
+  lastObstaclePos.setXY(0, 0);
+  lastObstacleTime = 0;
+  obstacleMarkedPermanent = false;
+  obstacleDetectionCount = 0;         
   mapCRC = 0;  
   CONSOLE.print("sizeof Point=");
   CONSOLE.println(sizeof(Point));  
@@ -1008,8 +1089,35 @@ bool Map::retryDocking(float stateX, float stateY){
   if (shouldRetryDock) {
     CONSOLE.println("ERROR retryDocking: already retrying!");   
     return false;
-  } 
-  if (dockPointsIdx > 0) dockPointsIdx--;    
+  }
+  
+  unsigned long currentTime = millis();
+  
+  // Check if retry is allowed based on timing
+  if (!shouldAllowRetry(currentTime)) {
+    CONSOLE.println("retryDocking: retry too soon, waiting...");
+    return false;
+  }
+  
+  // Increment retry count and update timestamp
+  dockRetryCount++;
+  lastRetryTime = currentTime;
+  
+  // Calculate how many steps to go back based on retry count
+  int stepsBack = calculateRetrySteps(dockRetryCount);
+  
+  // Move back the calculated number of steps
+  for (int i = 0; i < stepsBack && dockPointsIdx > 0; i++) {
+    dockPointsIdx--;
+  }
+  
+  CONSOLE.print("retryDocking: attempt ");
+  CONSOLE.print(dockRetryCount);
+  CONSOLE.print(", moved back ");
+  CONSOLE.print(stepsBack);
+  CONSOLE.print(" steps to index ");
+  CONSOLE.println(dockPointsIdx);
+  
   shouldRetryDock = true;
   trackReverse = (DOCK_FRONT_SIDE) || ((!DOCK_FRONT_SIDE) && (dockPointsIdx < dockPoints.numPoints-3));
   return true;
@@ -1024,7 +1132,10 @@ bool Map::startDocking(float stateX, float stateY){
   }  
   shouldDock = true;
   shouldRetryDock = false;
-  shouldMow = false;    
+  shouldMow = false;
+  
+  // Initialize retry state for new docking attempt
+  resetDockingRetryState();    
   if (dockPoints.numPoints > 0){
     if (wayMode == WAY_DOCK) {
       // Already in docking mode, skip path planning
@@ -1038,10 +1149,11 @@ bool Map::startDocking(float stateX, float stateY){
     dst.assign(dockPoints.points[0]);        
     //findPathFinderSafeStartPoint(src, dst);      
     wayMode = WAY_FREE;              
-    if (findPath(src, dst)){      
+    if (findPathWithAlternatives(src, dst)){      
       return true;
     } else {
-      // No valid path found to docking point
+      // No valid path found to docking point (tried alternatives)
+      CONSOLE.println("startDocking: all pathfinding attempts failed");
       return false;
     }
   } else {
@@ -2225,6 +2337,556 @@ void Map::smoothPath() {
   tempPoints.dealloc();
 }
 
+// Enhanced pathfinding with multiple route alternatives for docking
+bool Map::findPathWithAlternatives(Point &src, Point &dst) {
+  CONSOLE.println("findPathWithAlternatives: trying primary route");
+  
+  // First try the standard pathfinding
+  if (findPath(src, dst)) {
+    CONSOLE.println("findPathWithAlternatives: primary route successful");
+    return true;
+  }
+  
+  CONSOLE.println("findPathWithAlternatives: primary route failed, trying alternatives");
+  
+  // If primary route fails, try alternative routes
+  for (int i = 0; i < 3; i++) {
+    if (tryAlternativeRoute(src, dst, i)) {
+      CONSOLE.print("findPathWithAlternatives: alternative route ");
+      CONSOLE.print(i);
+      CONSOLE.println(" successful");
+      return true;
+    }
+  }
+  
+  // If all alternative routes failed, try different approach angles
+  CONSOLE.println("findPathWithAlternatives: trying alternative approach angles");
+  if (tryDockingWithAlternativeAngles(src, dst)) {
+    return true;
+  }
+  
+  CONSOLE.println("findPathWithAlternatives: all routes and angles failed");
+  return false;
+}
+
+// Try alternative route with different intermediate waypoints
+bool Map::tryAlternativeRoute(Point &src, Point &dst, int alternativeIndex) {
+  Point alternativePoints[4]; // Maximum 4 alternative waypoints
+  int numAlternatives = 0;
+  
+  generateAlternativeWaypoints(src, dst, alternativePoints, numAlternatives);
+  
+  if (alternativeIndex >= numAlternatives) return false;
+  
+  // Try route via alternative waypoint
+  Point intermediatePoint = alternativePoints[alternativeIndex];
+  
+  CONSOLE.print("tryAlternativeRoute: trying via (");
+  CONSOLE.print(intermediatePoint.x());
+  CONSOLE.print(",");
+  CONSOLE.print(intermediatePoint.y());
+  CONSOLE.println(")");
+  
+  // Check if route via intermediate point is viable
+  Point routePoints[3] = {src, intermediatePoint, dst};
+  if (!isRouteViable(src, dst, routePoints, 3)) {
+    return false;
+  }
+  
+  // Try first segment: src -> intermediate
+  if (!findPath(src, intermediatePoint)) {
+    return false;
+  }
+  
+  // Store first segment
+  Polygon firstSegment;
+  if (!firstSegment.alloc(freePoints.numPoints)) return false;
+  for (int i = 0; i < freePoints.numPoints; i++) {
+    firstSegment.points[i].assign(freePoints.points[i]);
+  }
+  firstSegment.numPoints = freePoints.numPoints;
+  
+  // Try second segment: intermediate -> dst
+  if (!findPath(intermediatePoint, dst)) {
+    firstSegment.dealloc();
+    return false;
+  }
+  
+  // Combine both segments
+  int totalPoints = firstSegment.numPoints + freePoints.numPoints - 1; // -1 to avoid duplicate intermediate point
+  Polygon combinedPath;
+  if (!combinedPath.alloc(totalPoints)) {
+    firstSegment.dealloc();
+    return false;
+  }
+  
+  // Copy first segment
+  for (int i = 0; i < firstSegment.numPoints; i++) {
+    combinedPath.points[i].assign(firstSegment.points[i]);
+  }
+  
+  // Copy second segment (skip first point to avoid duplication)
+  for (int i = 1; i < freePoints.numPoints; i++) {
+    combinedPath.points[firstSegment.numPoints + i - 1].assign(freePoints.points[i]);
+  }
+  combinedPath.numPoints = totalPoints;
+  
+  // Replace freePoints with combined path
+  freePoints.dealloc();
+  if (freePoints.alloc(totalPoints)) {
+    for (int i = 0; i < totalPoints; i++) {
+      freePoints.points[i].assign(combinedPath.points[i]);
+    }
+  }
+  
+  firstSegment.dealloc();
+  combinedPath.dealloc();
+  return true;
+}
+
+// Generate alternative waypoints for routing
+void Map::generateAlternativeWaypoints(Point &src, Point &dst, Point alternativePoints[], int &numAlternatives) {
+  numAlternatives = 0;
+  
+  float srcX = src.x();
+  float srcY = src.y();
+  float dstX = dst.x();
+  float dstY = dst.y();
+  
+  // Calculate perpendicular offsets to create alternative routes
+  float dx = dstX - srcX;
+  float dy = dstY - srcY;
+  float length = sqrt(dx*dx + dy*dy);
+  
+  if (length < 0.1) return; // Too short for alternatives
+  
+  // Normalize direction vector
+  dx /= length;
+  dy /= length;
+  
+  // Perpendicular vector
+  float perpX = -dy;
+  float perpY = dx;
+  
+  // Generate waypoints at different offsets and positions along the route
+  float offsets[] = {1.0, -1.0, 2.0}; // Left, right, far left
+  float positions[] = {0.3, 0.7, 0.5}; // Different positions along the route
+  
+  for (int i = 0; i < 3 && numAlternatives < 4; i++) {
+    float midX = srcX + dx * length * positions[i];
+    float midY = srcY + dy * length * positions[i];
+    
+    float altX = midX + perpX * offsets[i];
+    float altY = midY + perpY * offsets[i];
+    
+    // Check if alternative point is within perimeter and outside exclusions
+    Point altPoint(altX, altY);
+    if (isInsidePerimeterOutsideExclusions(altPoint)) {
+      alternativePoints[numAlternatives].setXY(altX, altY);
+      numAlternatives++;
+    }
+  }
+}
+
+// Check if a route via intermediate points is viable
+bool Map::isRouteViable(Point &src, Point &dst, Point intermediatePoints[], int numPoints) {
+  // Check each segment for major obstacles
+  for (int i = 0; i < numPoints - 1; i++) {
+    Point &segSrc = intermediatePoints[i];
+    Point &segDst = intermediatePoints[i + 1];
+    
+    // Quick check: if direct line intersects too many obstacles, route is not viable
+    int intersectionCount = 0;
+    for (int j = 0; j < pathFinderObstacles.numPolygons; j++) {
+      if (linePolygonIntersection(segSrc, segDst, pathFinderObstacles.polygons[j])) {
+        intersectionCount++;
+      }
+    }
+    
+    // If more than 2 obstacles block this segment, it's probably not viable
+    if (intersectionCount > 2) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+// Enhanced retry logic for docking
+int Map::calculateRetrySteps(int retryCount) {
+  // Gradual retreat: more steps back for each retry attempt
+  // First retry: 1 step back, second: 2 steps, third: 3 steps, max 4 steps
+  int steps = retryCount + 1;
+  if (steps > 4) steps = 4;
+  return steps;
+}
+
+bool Map::shouldAllowRetry(unsigned long currentTime) {
+  // Minimum delay between retry attempts (5 seconds)
+  const unsigned long MIN_RETRY_DELAY = 5000;
+  
+  if (lastRetryTime == 0) return true; // First retry
+  
+  return (currentTime - lastRetryTime) >= MIN_RETRY_DELAY;
+}
+
+void Map::resetDockingRetryState() {
+  dockRetryCount = 0;
+  lastRetryTime = 0;
+  shouldRetryDock = false;
+  CONSOLE.println("resetDockingRetryState: retry state cleared");
+}
+
+// Alternative approach angles for docking
+bool Map::tryDockingWithAlternativeAngles(Point &src, Point &dst) {
+  CONSOLE.println("tryDockingWithAlternativeAngles: testing different approach angles");
+  
+  // Calculate base angle from source to destination
+  float baseAngle = pointsAngle(src.x(), src.y(), dst.x(), dst.y());
+  
+  // Generate alternative approach angles
+  float angles[8];
+  int numAngles = 0;
+  generateApproachAngles(dst, baseAngle, angles, numAngles);
+  
+  // Try each approach angle
+  for (int i = 0; i < numAngles; i++) {
+    if (isApproachAngleViable(src, dst, angles[i])) {
+      // Calculate approach point for this angle
+      Point approachPoint = calculateApproachPoint(dst, angles[i], 1.0); // 1 meter approach distance
+      
+      // Try to find path via this approach point
+      if (findPath(src, approachPoint)) {
+        CONSOLE.print("tryDockingWithAlternativeAngles: found viable approach at angle ");
+        CONSOLE.println(angles[i] * 180.0 / PI);
+        
+        // Add the final segment to destination
+        if (freePoints.numPoints < 100) { // Assume reasonable limit for free points
+          freePoints.points[freePoints.numPoints].assign(dst);
+          freePoints.numPoints++;
+        }
+        return true;
+      }
+    }
+  }
+  
+  CONSOLE.println("tryDockingWithAlternativeAngles: no viable approach angle found");
+  return false;
+}
+
+void Map::generateApproachAngles(Point &dst, float baseAngle, float angles[], int &numAngles) {
+  numAngles = 0;
+  
+  // Generate angles in increments of 45 degrees around the base angle
+  float angleIncrements[] = {0, PI/4, -PI/4, PI/2, -PI/2, 3*PI/4, -3*PI/4, PI};
+  
+  for (int i = 0; i < 8; i++) {
+    float angle = baseAngle + angleIncrements[i];
+    
+    // Normalize angle to [-PI, PI]
+    while (angle > PI) angle -= 2*PI;
+    while (angle < -PI) angle += 2*PI;
+    
+    angles[numAngles] = angle;
+    numAngles++;
+  }
+}
+
+Point Map::calculateApproachPoint(Point &dst, float angle, float distance) {
+  Point approachPoint;
+  
+  // Calculate point at specified distance and angle from destination
+  approachPoint.setXY(
+    dst.x() - distance * cos(angle),
+    dst.y() - distance * sin(angle)
+  );
+  
+  return approachPoint;
+}
+
+bool Map::isApproachAngleViable(Point &src, Point &dst, float angle) {
+  // Calculate approach point
+  Point approachPoint = calculateApproachPoint(dst, angle, 1.0);
+  
+  // Check if approach point is safe for robot
+  if (!isPointSafeForRobot(approachPoint.x(), approachPoint.y())) {
+    return false;
+  }
+  
+  // Check if direct line from approach point to destination is clear
+  bool hasObstacle = false;
+  for (int i = 0; i < exclusions.numPolygons; i++) {
+    if (linePolygonIntersection(approachPoint, dst, exclusions.polygons[i])) {
+      hasObstacle = true;
+      break;
+    }
+  }
+  
+  return !hasObstacle;
+}
+
+// Enhanced obstacle detection functions
+
+// Check if an obstacle is likely temporary based on detection patterns
+bool Map::isObstacleTemporary(Point &obstaclePos, unsigned long detectionTime) {
+  const float SAME_OBSTACLE_DISTANCE = 0.3; // 30cm threshold for same obstacle
+  const unsigned long TEMPORARY_THRESHOLD = 30000; // 30 seconds
+  
+  // Calculate distance to last known obstacle
+  float distance = calculateDistance(lastObstaclePos, obstaclePos);
+  
+  // If it's the same obstacle position
+  if (distance < SAME_OBSTACLE_DISTANCE) {
+    // If detected multiple times within threshold, likely permanent
+    if (detectionTime - lastObstacleTime < TEMPORARY_THRESHOLD) {
+      obstacleDetectionCount++;
+      if (obstacleDetectionCount >= 3) {
+        return false; // Likely permanent
+      }
+    } else {
+      // Reset count if enough time has passed
+      obstacleDetectionCount = 1;
+    }
+  } else {
+    // New obstacle position
+    obstacleDetectionCount = 1;
+    lastObstaclePos.assign(obstaclePos);
+  }
+  
+  lastObstacleTime = detectionTime;
+  return true; // Assume temporary initially
+}
+
+// Determine if robot should wait for obstacle clearance
+bool Map::shouldWaitForObstacleClearance(Point &obstaclePos) {
+  const unsigned long WAIT_TIME = 10000; // 10 seconds wait time
+  
+  if (obstacleMarkedPermanent) {
+    return false; // Don't wait for permanent obstacles
+  }
+  
+  unsigned long currentTime = millis();
+  
+  // Check if obstacle is likely temporary
+  if (isObstacleTemporary(obstaclePos, currentTime)) {
+    // Wait if we haven't been waiting too long
+    if (currentTime - lastObstacleTime < WAIT_TIME) {
+      CONSOLE.println("shouldWaitForObstacleClearance: waiting for temporary obstacle");
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Mark current obstacle as permanent
+void Map::markObstacleAsPermanent(Point &obstaclePos) {
+  obstacleMarkedPermanent = true;
+  lastObstaclePos.assign(obstaclePos);
+  CONSOLE.println("markObstacleAsPermanent: obstacle marked as permanent");
+}
+
+// Check if path is clear of obstacles (for re-checking after waiting)
+bool Map::hasObstacleClearedPath(Point &src, Point &dst) {
+  // Simple check - in real implementation this would use sensor data
+  // For now, assume path might be clear after waiting period
+  unsigned long currentTime = millis();
+  const unsigned long CLEARANCE_CHECK_INTERVAL = 5000; // 5 seconds
+  
+  if (currentTime - lastObstacleTime > CLEARANCE_CHECK_INTERVAL) {
+    // Reset obstacle detection state for new attempt
+    obstacleMarkedPermanent = false;
+    obstacleDetectionCount = 0;
+    CONSOLE.println("hasObstacleClearedPath: path may be clear, resetting obstacle state");
+    return true;
+  }
+  
+  return false;
+}
+
+// Docking position validation functions
+
+// Validate if docking position is suitable for starting docking sequence
+bool Map::validateDockingPosition(float robotX, float robotY) {
+  CONSOLE.println("validateDockingPosition: checking docking feasibility");
+  
+  // Check if we have valid docking points
+  if (dockPoints.numPoints == 0) {
+    CONSOLE.println("validateDockingPosition: no docking points available");
+    return false;
+  }
+  
+  // Get the target docking position
+  Point dockPos;
+  if (dockPointsIdx < dockPoints.numPoints) {
+    dockPos.assign(dockPoints.points[dockPointsIdx]);
+  } else {
+    dockPos.assign(dockPoints.points[0]); // Use first dock point as fallback
+  }
+  
+  // Check if docking station is accessible
+  if (!isDockingStationAccessible(dockPos)) {
+    CONSOLE.println("validateDockingPosition: docking station not accessible");
+    return false;
+  }
+  
+  // Check if docking area is clear
+  const float CLEARANCE_RADIUS = 0.5; // 50cm clearance radius
+  if (!isDockingAreaClear(dockPos, CLEARANCE_RADIUS)) {
+    CONSOLE.println("validateDockingPosition: docking area not clear");
+    return false;
+  }
+  
+  // Check distance to docking station
+  float distance = calculateDockingDistance(robotX, robotY);
+  const float MAX_DOCKING_DISTANCE = 10.0; // 10 meters maximum distance
+  if (distance > MAX_DOCKING_DISTANCE) {
+    CONSOLE.print("validateDockingPosition: distance too far: ");
+    CONSOLE.println(distance);
+    return false;
+  }
+  
+  CONSOLE.println("validateDockingPosition: docking position validated successfully");
+  return true;
+}
+
+// Check if docking station is accessible (no permanent obstacles blocking path)
+bool Map::isDockingStationAccessible(Point &dockPos) {
+  // Use actual robot position from state estimator
+  Point robotPos;
+  robotPos.setXY(stateX, stateY); // Current robot position from StateEstimator
+  
+  // Check if there's a clear path to docking station
+  // This is a simplified check - real implementation would use more sophisticated pathfinding
+  
+  // Check for intersections with exclusion zones
+  for (int i = 0; i < exclusions.numPolygons; i++) {
+    if (linePolygonIntersection(robotPos, dockPos, exclusions.polygons[i])) {
+      return false; // Path blocked by exclusion zone
+    }
+  }
+  
+  // Check for intersections with known permanent obstacles
+  for (int i = 0; i < obstacles.numPolygons; i++) {
+    if (linePolygonIntersection(robotPos, dockPos, obstacles.polygons[i])) {
+      return false; // Path blocked by obstacle
+    }
+  }
+  
+  return true; // Path appears clear
+}
+
+// Check if area around docking station is clear of obstacles
+bool Map::isDockingAreaClear(Point &dockPos, float clearanceRadius) {
+  // Check if docking position is safe for robot
+  if (!isPointSafeForRobot(dockPos.x(), dockPos.y())) {
+    return false;
+  }
+  
+  // Check points around docking position in a circle
+  const int NUM_CHECK_POINTS = 8;
+  for (int i = 0; i < NUM_CHECK_POINTS; i++) {
+    float angle = (2.0 * PI * i) / NUM_CHECK_POINTS;
+    float checkX = dockPos.x() + clearanceRadius * cos(angle);
+    float checkY = dockPos.y() + clearanceRadius * sin(angle);
+    
+    if (!isPointSafeForRobot(checkX, checkY)) {
+      return false; // Clearance area not safe
+    }
+  }
+  
+  return true; // Docking area is clear
+}
+
+// Calculate distance from robot to docking station
+float Map::calculateDockingDistance(float robotX, float robotY) {
+  if (dockPoints.numPoints == 0) {
+    return FLT_MAX; // No docking points available
+  }
+  
+  // Get target docking position
+  Point dockPos;
+  if (dockPointsIdx < dockPoints.numPoints) {
+    dockPos.assign(dockPoints.points[dockPointsIdx]);
+  } else {
+    dockPos.assign(dockPoints.points[0]); // Use first dock point as fallback
+  }
+  
+  // Calculate Euclidean distance
+  float dx = dockPos.x() - robotX;
+  float dy = dockPos.y() - robotY;
+  return sqrt(dx * dx + dy * dy);
+}
+
+// Adaptive docking speed control functions
+
+// Calculate adaptive speed based on distance to docking target
+float Map::calculateAdaptiveDockingSpeed(float distanceToTarget) {
+  // Define speed zones based on distance
+  const float PRECISION_ZONE = 0.5;    // Within 50cm - very slow
+  const float APPROACH_ZONE = 2.0;     // Within 2m - slow
+  const float NORMAL_ZONE = 5.0;       // Within 5m - medium
+  
+  // Define base speeds (as multipliers of normal speed)
+  const float PRECISION_SPEED = 0.2;   // 20% of normal speed
+  const float APPROACH_SPEED = 0.4;    // 40% of normal speed
+  const float NORMAL_SPEED = 0.7;      // 70% of normal speed
+  const float FAST_SPEED = 1.0;        // 100% of normal speed
+  
+  if (distanceToTarget <= PRECISION_ZONE) {
+    return PRECISION_SPEED;
+  } else if (distanceToTarget <= APPROACH_ZONE) {
+    // Linear interpolation between precision and approach speed
+    float ratio = (distanceToTarget - PRECISION_ZONE) / (APPROACH_ZONE - PRECISION_ZONE);
+    return PRECISION_SPEED + ratio * (APPROACH_SPEED - PRECISION_SPEED);
+  } else if (distanceToTarget <= NORMAL_ZONE) {
+    // Linear interpolation between approach and normal speed
+    float ratio = (distanceToTarget - APPROACH_ZONE) / (NORMAL_ZONE - APPROACH_ZONE);
+    return APPROACH_SPEED + ratio * (NORMAL_SPEED - APPROACH_SPEED);
+  } else {
+    return FAST_SPEED; // Full speed for distances > 5m
+  }
+}
+
+// Get speed multiplier based on distance
+float Map::getDockingSpeedMultiplier(float distance) {
+  return calculateAdaptiveDockingSpeed(distance);
+}
+
+// Check if robot should use precision mode (very slow, careful movement)
+bool Map::shouldUsePrecisionMode(float distance) {
+  const float PRECISION_THRESHOLD = 0.5; // 50cm
+  return distance <= PRECISION_THRESHOLD;
+}
+
+// Update docking speed profile with smooth transitions
+void Map::updateDockingSpeedProfile(float currentDistance, float &targetSpeed) {
+  float newTargetSpeed = calculateAdaptiveDockingSpeed(currentDistance);
+  
+  // Smooth speed transitions to avoid jerky movements
+  const float SPEED_CHANGE_RATE = 0.1; // Maximum change per update cycle
+  
+  if (newTargetSpeed > targetSpeed) {
+    // Accelerating - can be more aggressive
+    targetSpeed = min(newTargetSpeed, targetSpeed + SPEED_CHANGE_RATE * 2.0);
+  } else {
+    // Decelerating - be more conservative for safety
+    targetSpeed = max(newTargetSpeed, targetSpeed - SPEED_CHANGE_RATE);
+  }
+  
+  // Ensure speed stays within valid bounds
+  targetSpeed = max(0.1, min(1.0, targetSpeed)); // Between 10% and 100%
+  
+  // Log speed changes for debugging
+  static float lastLoggedSpeed = -1;
+  if (abs(targetSpeed - lastLoggedSpeed) > 0.05) { // Log only significant changes
+    CONSOLE.print("updateDockingSpeedProfile: distance=");
+    CONSOLE.print(currentDistance);
+    CONSOLE.print("m, speed=");
+    CONSOLE.println(targetSpeed);
+    lastLoggedSpeed = targetSpeed;
+  }
+}
 
 // path finder stress test
 void Map::stressTest(){  

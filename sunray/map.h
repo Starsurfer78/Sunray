@@ -10,6 +10,13 @@
 #include <Arduino.h>
 #include <SD.h>
 
+// Common allocation helper template to reduce code duplication
+template<typename T>
+struct AllocationHelper {
+  static bool validateSize(short size, short maxSize, const char* typeName);
+  static void reportAllocError(const char* typeName);
+};
+
 
 // waypoint type
 enum WayType {WAY_PERIMETER, WAY_EXCLUSION, WAY_DOCK, WAY_MOW, WAY_FREE};
@@ -155,7 +162,15 @@ class Map
            
     bool shouldDock;  // start docking?
     bool shouldRetryDock; // retry docking?
-    bool shouldMow;  // start mowing?       
+    bool shouldMow;  // start mowing?
+    int dockRetryCount; // number of retry attempts
+    unsigned long lastRetryTime; // timestamp of last retry attempt
+    
+    // Enhanced obstacle detection variables
+    Point lastObstaclePos; // position of last detected obstacle
+    unsigned long lastObstacleTime; // timestamp of last obstacle detection
+    bool obstacleMarkedPermanent; // whether current obstacle is marked as permanent
+    int obstacleDetectionCount; // number of times same obstacle was detected       
     
     long mapCRC;  // map data CRC
         
@@ -262,6 +277,41 @@ class Map
     Node* processPathfindingNodes(Point &src, Point &dst, unsigned long startTime);
     bool reconstructPath(Node* resultNode, Point &dst);
     void smoothPath(); // Smooth path by removing unnecessary waypoints
+    
+    // Enhanced pathfinding and docking functions
+    bool findPathWithAlternatives(Point &src, Point &dst);
+    bool tryAlternativeRoute(Point &src, Point &dst, int alternativeIndex);
+    void generateAlternativeWaypoints(Point &src, Point &dst, Point alternativePoints[], int &numAlternatives);
+    bool isRouteViable(Point &src, Point &dst, Point intermediatePoints[], int numPoints);
+    
+    // Enhanced retry logic functions
+    int calculateRetrySteps(int retryCount);
+    bool shouldAllowRetry(unsigned long currentTime);
+    void resetDockingRetryState();
+    
+    // Alternative approach angle functions
+    bool tryDockingWithAlternativeAngles(Point &src, Point &dst);
+    void generateApproachAngles(Point &dst, float baseAngle, float angles[], int &numAngles);
+    Point calculateApproachPoint(Point &dst, float angle, float distance);
+    bool isApproachAngleViable(Point &src, Point &dst, float angle);
+    
+    // Enhanced obstacle detection for docking
+    bool isObstacleTemporary(Point &obstaclePos, unsigned long detectionTime);
+    bool shouldWaitForObstacleClearance(Point &obstaclePos);
+    void markObstacleAsPermanent(Point &obstaclePos);
+    bool hasObstacleClearedPath(Point &src, Point &dst);
+    
+    // Docking position validation
+    bool validateDockingPosition(float robotX, float robotY);
+    bool isDockingStationAccessible(Point &dockPos);
+    bool isDockingAreaClear(Point &dockPos, float clearanceRadius);
+    float calculateDockingDistance(float robotX, float robotY);
+    
+    // Adaptive docking speed control
+    float calculateAdaptiveDockingSpeed(float distanceToTarget);
+    float getDockingSpeedMultiplier(float distance);
+    bool shouldUsePrecisionMode(float distance);
+    void updateDockingSpeedProfile(float currentDistance, float &targetSpeed);
 };
 
 
