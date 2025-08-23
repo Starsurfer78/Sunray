@@ -32,6 +32,11 @@ class PID
     float Kd;   // differential control
     unsigned long lastControlTime;
     unsigned long consoleWarnTimeout;
+
+  private:
+    void applyOutputClamping(float& output, float min_val, float max_val);
+    void applyOutputRamping(float& output, float old_output, float Ta, float ramp_rate);
+    float calculateSampleTime(unsigned long current_time, unsigned long& last_time, float max_ta);
 };
 
 
@@ -56,6 +61,11 @@ class VelocityPID
     float Ki;   // integral control
     float Kd;   // differential control
     unsigned long lastControlTime;
+
+  private:
+    void applyOutputClamping(int& output, int min_val, int max_val);
+    void applyOutputRamping(int& output, int old_output, float Ta, float ramp_rate);
+    float calculateSampleTime(unsigned long current_time, unsigned long& last_time, float max_ta);
 };
 
 
