@@ -213,50 +213,9 @@ void readIMU(){
 
 
 void resetImuTimeout(){
-  imuDataTimeout = millis() + 10000;  
+  imuDataTimeout = millis() + 10000;
 }
 
-
-// apply GPS antenna offset correction to GPS coordinates
-// transforms GPS antenna position to robot center position
-void applyAntennaOffsetCorrection(float &posN, float &posE, float robotYaw) {
-  #ifdef ENABLE_ANTENNA_OFFSET
-    if (ENABLE_ANTENNA_OFFSET) {
-      // Convert offset from cm to meters
-      float offsetX_m = GPS_ANTENNA_OFFSET_X_CM / 100.0;
-      float offsetY_m = GPS_ANTENNA_OFFSET_Y_CM / 100.0;
-      float offsetZ_m = GPS_ANTENNA_OFFSET_Z_CM / 100.0;
-      
-      #ifdef ENABLE_3D_ORIENTATION
-        if (ENABLE_3D_ORIENTATION && USE_ROTATION_MATRIX) {
-          // Use 3D rotation matrix for precise correction on tilted robot
-          RotationMatrix rotMatrix = calculateRotationMatrix(stateRoll, statePitch, robotYaw);
-          
-          // Transform antenna offset from robot frame to world frame
-          float offsetRobot[3] = {offsetX_m, offsetY_m, offsetZ_m};
-          float offsetWorld[3];
-          transformVector(rotMatrix, offsetRobot, offsetWorld);
-          
-          // Correct GPS position: subtract antenna offset to get robot center
-          posN -= offsetWorld[0]; // North component
-          posE -= offsetWorld[1]; // East component
-          // Note: offsetWorld[2] would be height correction (not used for 2D GPS)
-          
-          return;
-        }
-      #endif
-      
-      // Fallback: Apply 2D rotation based on robot yaw only (existing behavior)
-      // GPS antenna offset in robot frame -> world frame
-      float offsetN = offsetX_m * cos(robotYaw) - offsetY_m * sin(robotYaw);
-      float offsetE = offsetX_m * sin(robotYaw) + offsetY_m * cos(robotYaw);
-      
-      // Correct GPS position: subtract antenna offset to get robot center
-      posN -= offsetN;
-      posE -= offsetE;
-    }
-  #endif
-}
 
 // ========== 3D Orientation Matrix Functions (Phase 3) ==========
 
@@ -316,6 +275,47 @@ void transformVector(const RotationMatrix& R, float in[3], float out[3]) {
   out[0] = in[0]; 
   out[1] = in[1]; 
   out[2] = in[2];
+}
+
+// apply GPS antenna offset correction to GPS coordinates
+// transforms GPS antenna position to robot center position
+void applyAntennaOffsetCorrection(float &posN, float &posE, float robotYaw) {
+  #ifdef ENABLE_ANTENNA_OFFSET
+    if (ENABLE_ANTENNA_OFFSET) {
+      // Convert offset from cm to meters
+      float offsetX_m = GPS_ANTENNA_OFFSET_X_CM / 100.0;
+      float offsetY_m = GPS_ANTENNA_OFFSET_Y_CM / 100.0;
+      float offsetZ_m = GPS_ANTENNA_OFFSET_Z_CM / 100.0;
+      
+      #ifdef ENABLE_3D_ORIENTATION
+        if (ENABLE_3D_ORIENTATION && USE_ROTATION_MATRIX) {
+          // Use 3D rotation matrix for precise correction on tilted robot
+          RotationMatrix rotMatrix = calculateRotationMatrix(stateRoll, statePitch, robotYaw);
+          
+          // Transform antenna offset from robot frame to world frame
+          float offsetRobot[3] = {offsetX_m, offsetY_m, offsetZ_m};
+          float offsetWorld[3];
+          transformVector(rotMatrix, offsetRobot, offsetWorld);
+          
+          // Correct GPS position: subtract antenna offset to get robot center
+          posN -= offsetWorld[0]; // North component
+          posE -= offsetWorld[1]; // East component
+          // Note: offsetWorld[2] would be height correction (not used for 2D GPS)
+          
+          return;
+        }
+      #endif
+      
+      // Fallback: Apply 2D rotation based on robot yaw only (existing behavior)
+      // GPS antenna offset in robot frame -> world frame
+      float offsetN = offsetX_m * cos(robotYaw) - offsetY_m * sin(robotYaw);
+      float offsetE = offsetX_m * sin(robotYaw) + offsetY_m * cos(robotYaw);
+      
+      // Correct GPS position: subtract antenna offset to get robot center
+      posN -= offsetN;
+      posE -= offsetE;
+    }
+  #endif
 }
 
 // Enhanced complementary filter for 3D orientation
