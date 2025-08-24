@@ -669,6 +669,16 @@ void start(){
     gps.begin(GPS, GPS_BAUDRATE);   
   #endif
 
+#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
+  // Initialize GPS antenna offset correction
+  gpsAntennaOffset.setOffset(GPS_ANTENNA_OFFSET_X, GPS_ANTENNA_OFFSET_Y, GPS_ANTENNA_OFFSET_Z);
+  gpsAntennaOffset.setEnabled(true);
+  CONSOLE.println("GPS antenna offset correction enabled");
+  CONSOLE.print("Offset X: "); CONSOLE.print(GPS_ANTENNA_OFFSET_X); CONSOLE.println(" m");
+  CONSOLE.print("Offset Y: "); CONSOLE.print(GPS_ANTENNA_OFFSET_Y); CONSOLE.println(" m");
+  CONSOLE.print("Offset Z: "); CONSOLE.print(GPS_ANTENNA_OFFSET_Z); CONSOLE.println(" m");
+#endif
+
   maps.begin();      
   //maps.clipperTest();
     

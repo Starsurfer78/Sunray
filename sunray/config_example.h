@@ -376,6 +376,14 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define CPG_CONFIG_FILTER_NCNOTHRS 10   // C/N0 Threshold #SVs: 10 (robust), 6 (less robust)
 #define CPG_CONFIG_FILTER_CNOTHRS  30   // 30 dbHz (robust), 13 dbHz (less robust)
 
+// ------ GPS antenna offset correction -------------------------
+// GPS antenna position relative to robot center (meters)
+// Use this if GPS antenna is not mounted at robot center
+//#define ENABLE_ANTENNA_OFFSET_CORRECTION  true    // enable GPS antenna offset correction? (uncomment to activate)
+#define GPS_ANTENNA_OFFSET_X  0.15  // Meter, forward from robot center (positive = forward, negative = backward)
+#define GPS_ANTENNA_OFFSET_Y  0.05  // Meter, sideways from robot center (positive = right, negative = left)  
+#define GPS_ANTENNA_OFFSET_Z  0.20  // Meter, vertical from robot center (positive = up, negative = down)
+
 
 // ------ obstacle detection and avoidance  -------------------------
 
