@@ -17,7 +17,7 @@
 // base class for all operations (op's)
 class Op {
   public:     
-    virtual String getOperationName();
+    virtual String name();
     // -------- transitions ----------------------------------       
     // op inititated by operator?
     bool initiatedByOperator;
@@ -91,7 +91,7 @@ class Op {
 // idle op
 class IdleOp: public Op {
   public:        
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -102,7 +102,7 @@ class ImuCalibrationOp: public Op {
   public:        
     unsigned long nextImuCalibrationSecond;
     int imuCalibrationSeconds;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void changeOp(Op &anOp, bool returnBackOnExit = false) override;
     virtual void begin() override;
     virtual void end() override;
@@ -114,7 +114,7 @@ class RelocalizationOp: public Op {
   public:        
     unsigned long nextRelocalizationSecond;
     int relocalizationSeconds;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void changeOp(Op &anOp, bool returnBackOnExit = false) override;
     virtual void begin() override;
     virtual void end() override;
@@ -127,7 +127,7 @@ class MowOp: public Op {
     bool lastMapRoutingFailed;
     int mapRoutingFailedCounter;
     MowOp();
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -148,12 +148,6 @@ class MowOp: public Op {
     virtual void onNoFurtherWaypoints() override;     
     virtual void onImuTilt() override;
     virtual void onImuError() override;
-  private:
-    // Central GPS issue handling to eliminate code duplication
-    void handleGpsIssue(Sensor sensorType, Op& targetOp);
-    // Refactored helper functions for run()
-    void performObstacleDetection();
-    void checkTimetableConditions();
 };
 
 // dock op (driving to first dock point and following dock points until charging point)
@@ -164,7 +158,7 @@ class DockOp: public Op {
     bool lastMapRoutingFailed;
     int mapRoutingFailedCounter;
     DockOp();
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -187,7 +181,7 @@ class ChargeOp: public Op {
     bool retryTouchDock;
     bool betterTouchDock;
     unsigned long nextConsoleDetailsTime;   
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -205,7 +199,7 @@ class KidnapWaitOp: public Op {
   public:
     unsigned long recoverGpsTime;
     int recoverGpsCounter;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -217,7 +211,7 @@ class KidnapWaitOp: public Op {
 class GpsRebootRecoveryOp: public Op {
   public:
     unsigned long retryOperationTime;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -226,7 +220,7 @@ class GpsRebootRecoveryOp: public Op {
 // wait for gps fix
 class GpsWaitFixOp: public Op {
   public:
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -235,7 +229,7 @@ class GpsWaitFixOp: public Op {
 // wait for gps signal (float or fix)
 class GpsWaitFloatOp: public Op {
   public:
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -246,7 +240,7 @@ class GpsWaitFloatOp: public Op {
 class EscapeReverseOp: public Op {
   public:        
     unsigned long driveReverseStopTime;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -258,7 +252,7 @@ class EscapeReverseOp: public Op {
 class EscapeForwardOp: public Op {
   public:        
     unsigned long driveForwardStopTime;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -269,7 +263,7 @@ class EscapeForwardOp: public Op {
 // error op
 class ErrorOp: public Op {
   public:        
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;

@@ -9,7 +9,7 @@
 #include "../../map.h"
 
 
-String ErrorOp::getOperationName(){
+String ErrorOp::name(){
     return "Error";
 }
 

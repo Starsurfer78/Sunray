@@ -19,7 +19,7 @@ DockOp::DockOp(){
 }
 
 
-String DockOp::getOperationName(){
+String DockOp::name(){
     return "Dock";
 }
 

@@ -9,7 +9,7 @@
 #include "../../map.h"
 
 
-String EscapeForwardOp::getOperationName(){
+String EscapeForwardOp::name(){
     return "EscapeForward";
 }
 

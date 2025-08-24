@@ -8,7 +8,7 @@
 #include "../../robot.h"
 #include "../../map.h"
 
-String IdleOp::getOperationName(){
+String IdleOp::name(){
     return "Idle";
 }
 

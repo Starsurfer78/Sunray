@@ -171,33 +171,13 @@ volatile unsigned long motorLeftTicksTimeout = 0;
 volatile unsigned long motorRightTicksTimeout = 0;
 volatile unsigned long motorMowTicksTimeout = 0;
 
-// Hochpräzise Mikrosekunden-Timeouts
-volatile unsigned long motorLeftTicksTimeoutUs = 0;
-volatile unsigned long motorRightTicksTimeoutUs = 0;
-volatile unsigned long motorMowTicksTimeoutUs = 0;
-
 volatile unsigned long motorLeftTransitionTime = 0;
 volatile unsigned long motorRightTransitionTime = 0;
 volatile unsigned long motorMowTransitionTime = 0;
 
-// Hochpräzise Mikrosekunden-Transitionszeiten
-volatile unsigned long motorLeftTransitionTimeUs = 0;
-volatile unsigned long motorRightTransitionTimeUs = 0;
-volatile unsigned long motorMowTransitionTimeUs = 0;
-
 volatile float motorLeftDurationMax = 0;
 volatile float motorRightDurationMax = 0;
 volatile float motorMowDurationMax = 0;
-
-// Hochpräzise Mikrosekunden-DurationMax
-volatile float motorLeftDurationMaxUs = 0;
-volatile float motorRightDurationMaxUs = 0;
-volatile float motorMowDurationMaxUs = 0;
-
-// Geschwindigkeitsvariablen für Odometrie-ISRs
-volatile float motorLeftSpeed = 0.0;     // Geschwindigkeit linker Motor (ticks/s)
-volatile float motorRightSpeed = 0.0;    // Geschwindigkeit rechter Motor (ticks/s)
-volatile float motorMowSpeed = 0.0;      // Geschwindigkeit Mähmotor (ticks/s)
 
 volatile bool stopButton = false;
 volatile int testValue = false; 
@@ -265,17 +245,7 @@ HardwareSerial mSerial2(pinBluetoothRX, pinBluetoothTX);  // rx, tx  - UART avai
 #define CONSOLE2_BAUDRATE 115200
 
 
-#define SUPER_SPIKE_ELIMINATOR 1  // advanced spike elimination - aktiviert für bessere Odometrie-Genauigkeit
-
-// Odometrie Spike-Eliminierung Konstanten
-#define ODOMETRY_MIN_PULSE_DURATION_MS 2    // Minimale Pulsdauer in ms
-#define ODOMETRY_MAX_PULSE_DURATION_MS 200  // Maximale Pulsdauer in ms (bei sehr langsamer Fahrt)
-#define ODOMETRY_DURATION_FILTER_FACTOR 0.8 // Tiefpassfilter für Pulsdauer (0.0-1.0)
-
-// Hochpräzise Timing-Konstanten (Mikrosekunden)
-#define ODOMETRY_MIN_PULSE_DURATION_US 2000    // Minimale Pulsdauer in µs (2ms)
-#define ODOMETRY_MAX_PULSE_DURATION_US 200000  // Maximale Pulsdauer in µs (200ms)
-#define ODOMETRY_USE_MICROS 1                  // Verwende micros() für höhere Präzision
+//#define SUPER_SPIKE_ELIMINATOR 1  // advanced spike elimination  (experimental, comment out to disable)
 
 
 // answer Bluetooth with CRC
@@ -292,47 +262,13 @@ void cmdAnswer(String s){
 
 void OdometryMowISR(){			
   if (digitalRead(pinMotorMowImp) == LOW) return;
-  
+  if (millis() < motorMowTicksTimeout) return; // eliminate spikes  
   #ifdef SUPER_SPIKE_ELIMINATOR
-    #ifdef ODOMETRY_USE_MICROS
-      // Hochpräzise Mikrosekunden-Timing
-      if (micros() < motorMowTicksTimeoutUs) return; // eliminate spikes
-      unsigned long currentTimeUs = micros();
-      unsigned long durationUs = currentTimeUs - motorMowTransitionTimeUs;
-      
-      // Validiere Pulsdauer - ignoriere zu kurze (Spikes) und zu lange (Stillstand) Pulse
-      if (durationUs < ODOMETRY_MIN_PULSE_DURATION_US || durationUs > ODOMETRY_MAX_PULSE_DURATION_US) {
-        motorMowTransitionTimeUs = currentTimeUs;
-        return;
-      }
-      
-      motorMowTransitionTimeUs = currentTimeUs;
-      // Adaptiver Tiefpassfilter für erwartete Pulsdauer
-      motorMowDurationMaxUs = ODOMETRY_DURATION_FILTER_FACTOR * motorMowDurationMaxUs + 
-                             (1.0 - ODOMETRY_DURATION_FILTER_FACTOR) * durationUs;
-      motorMowTicksTimeoutUs = currentTimeUs + max(ODOMETRY_MIN_PULSE_DURATION_US, (unsigned long)motorMowDurationMaxUs);
-      
-      // Geschwindigkeitsberechnung: ticks/s = 1000000 / duration_us
-      motorMowSpeed = 1000000.0 / durationUs;
-    #else
-      // Fallback auf Millisekunden-Timing
-      if (millis() < motorMowTicksTimeout) return; // eliminate spikes
-      unsigned long currentTime = millis();
-      unsigned long duration = currentTime - motorMowTransitionTime;
-      
-      if (duration < ODOMETRY_MIN_PULSE_DURATION_MS || duration > ODOMETRY_MAX_PULSE_DURATION_MS) {
-        motorMowTransitionTime = currentTime;
-        return;
-      }
-      
-      motorMowTransitionTime = currentTime;
-      motorMowDurationMax = ODOMETRY_DURATION_FILTER_FACTOR * motorMowDurationMax + 
-                           (1.0 - ODOMETRY_DURATION_FILTER_FACTOR) * duration;
-      motorMowTicksTimeout = currentTime + max(ODOMETRY_MIN_PULSE_DURATION_MS, (unsigned long)motorMowDurationMax);
-      
-      // Geschwindigkeitsberechnung: ticks/s = 1000 / duration_ms
-      motorMowSpeed = 1000.0 / duration;
-    #endif
+    unsigned long duration = millis() - motorMowTransitionTime;
+    if (duration > 5) duration = 0;
+    motorMowTransitionTime = millis();
+    motorMowDurationMax = 0.7 * max(((float)motorMowDurationMax), ((float)duration));
+    motorMowTicksTimeout = millis() + motorMowDurationMax;
   #else
     motorMowTicksTimeout = millis() + 3;
   #endif
@@ -341,47 +277,13 @@ void OdometryMowISR(){
 
 void OdometryLeftISR(){			  
   if (digitalRead(pinMotorLeftImp) == LOW) return;
-  
+  if (millis() < motorLeftTicksTimeout) return; // eliminate spikes  
   #ifdef SUPER_SPIKE_ELIMINATOR
-    #ifdef ODOMETRY_USE_MICROS
-      // Hochpräzise Mikrosekunden-Timing
-      if (micros() < motorLeftTicksTimeoutUs) return; // eliminate spikes
-      unsigned long currentTimeUs = micros();
-      unsigned long durationUs = currentTimeUs - motorLeftTransitionTimeUs;
-      
-      // Validiere Pulsdauer - ignoriere zu kurze (Spikes) und zu lange (Stillstand) Pulse
-      if (durationUs < ODOMETRY_MIN_PULSE_DURATION_US || durationUs > ODOMETRY_MAX_PULSE_DURATION_US) {
-        motorLeftTransitionTimeUs = currentTimeUs;
-        return;
-      }
-      
-      motorLeftTransitionTimeUs = currentTimeUs;
-      // Adaptiver Tiefpassfilter für erwartete Pulsdauer
-      motorLeftDurationMaxUs = ODOMETRY_DURATION_FILTER_FACTOR * motorLeftDurationMaxUs + 
-                              (1.0 - ODOMETRY_DURATION_FILTER_FACTOR) * durationUs;
-      motorLeftTicksTimeoutUs = currentTimeUs + max(ODOMETRY_MIN_PULSE_DURATION_US, (unsigned long)motorLeftDurationMaxUs);
-      
-      // Geschwindigkeitsberechnung: ticks/s = 1000000 / duration_us
-      motorLeftSpeed = 1000000.0 / durationUs;
-    #else
-      // Fallback auf Millisekunden-Timing
-      if (millis() < motorLeftTicksTimeout) return; // eliminate spikes
-      unsigned long currentTime = millis();
-      unsigned long duration = currentTime - motorLeftTransitionTime;
-      
-      if (duration < ODOMETRY_MIN_PULSE_DURATION_MS || duration > ODOMETRY_MAX_PULSE_DURATION_MS) {
-        motorLeftTransitionTime = currentTime;
-        return;
-      }
-      
-      motorLeftTransitionTime = currentTime;
-      motorLeftDurationMax = ODOMETRY_DURATION_FILTER_FACTOR * motorLeftDurationMax + 
-                            (1.0 - ODOMETRY_DURATION_FILTER_FACTOR) * duration;
-      motorLeftTicksTimeout = currentTime + max(ODOMETRY_MIN_PULSE_DURATION_MS, (unsigned long)motorLeftDurationMax);
-      
-      // Geschwindigkeitsberechnung: ticks/s = 1000 / duration_ms
-      motorLeftSpeed = 1000.0 / duration;
-    #endif
+    unsigned long duration = millis() - motorLeftTransitionTime;
+    if (duration > 5) duration = 0;
+    motorLeftTransitionTime = millis();
+    motorLeftDurationMax = 0.7 * max(((float)motorLeftDurationMax), ((float)duration));
+    motorLeftTicksTimeout = millis() + motorLeftDurationMax;
   #else
     motorLeftTicksTimeout = millis() + 3;
   #endif
@@ -390,47 +292,13 @@ void OdometryLeftISR(){
 
 void OdometryRightISR(){			
   if (digitalRead(pinMotorRightImp) == LOW) return;  
-  
+  if (millis() < motorRightTicksTimeout) return; // eliminate spikes
   #ifdef SUPER_SPIKE_ELIMINATOR
-    #ifdef ODOMETRY_USE_MICROS
-      // Hochpräzise Mikrosekunden-Timing
-      if (micros() < motorRightTicksTimeoutUs) return; // eliminate spikes
-      unsigned long currentTimeUs = micros();
-      unsigned long durationUs = currentTimeUs - motorRightTransitionTimeUs;
-      
-      // Validiere Pulsdauer - ignoriere zu kurze (Spikes) und zu lange (Stillstand) Pulse
-      if (durationUs < ODOMETRY_MIN_PULSE_DURATION_US || durationUs > ODOMETRY_MAX_PULSE_DURATION_US) {
-        motorRightTransitionTimeUs = currentTimeUs;
-        return;
-      }
-      
-      motorRightTransitionTimeUs = currentTimeUs;
-      // Adaptiver Tiefpassfilter für erwartete Pulsdauer
-      motorRightDurationMaxUs = ODOMETRY_DURATION_FILTER_FACTOR * motorRightDurationMaxUs + 
-                               (1.0 - ODOMETRY_DURATION_FILTER_FACTOR) * durationUs;
-      motorRightTicksTimeoutUs = currentTimeUs + max(ODOMETRY_MIN_PULSE_DURATION_US, (unsigned long)motorRightDurationMaxUs);
-      
-      // Geschwindigkeitsberechnung: ticks/s = 1000000 / duration_us
-      motorRightSpeed = 1000000.0 / durationUs;
-    #else
-      // Fallback auf Millisekunden-Timing
-      if (millis() < motorRightTicksTimeout) return; // eliminate spikes
-      unsigned long currentTime = millis();
-      unsigned long duration = currentTime - motorRightTransitionTime;
-      
-      if (duration < ODOMETRY_MIN_PULSE_DURATION_MS || duration > ODOMETRY_MAX_PULSE_DURATION_MS) {
-        motorRightTransitionTime = currentTime;
-        return;
-      }
-      
-      motorRightTransitionTime = currentTime;
-      motorRightDurationMax = ODOMETRY_DURATION_FILTER_FACTOR * motorRightDurationMax + 
-                             (1.0 - ODOMETRY_DURATION_FILTER_FACTOR) * duration;
-      motorRightTicksTimeout = currentTime + max(ODOMETRY_MIN_PULSE_DURATION_MS, (unsigned long)motorRightDurationMax);
-      
-      // Geschwindigkeitsberechnung: ticks/s = 1000 / duration_ms
-      motorRightSpeed = 1000.0 / duration;
-    #endif
+    unsigned long duration = millis() - motorRightTransitionTime;
+    if (duration > 5) duration = 0;  
+    motorRightTransitionTime = millis();
+    motorRightDurationMax = 0.7 * max(((float)motorRightDurationMax), ((float)duration));  
+    motorRightTicksTimeout = millis() + motorRightDurationMax;
   #else
     motorRightTicksTimeout = millis() + 3;
   #endif

@@ -29,11 +29,7 @@ ERingBuffer::ERingBuffer(unsigned int size)
 	init();
 }
 
-ERingBuffer::~ERingBuffer() {
-	// Free the dynamically allocated buffer to prevent memory leak
-	delete[] ringBuf;
-	ringBuf = nullptr;
-}
+ERingBuffer::~ERingBuffer() {}
 
 void ERingBuffer::reset()
 {

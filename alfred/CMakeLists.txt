@@ -89,37 +89,6 @@ set_source_files_properties(${FIRMWARE_PATH}/sunray.ino PROPERTIES COMPILE_FLAGS
 
 add_executable(sunray ${pi_sources} ${sunray_cpp} ${sunray_c} ${FIRMWARE_PATH}/sunray.ino)
 target_include_directories(sunray PRIVATE src ${FIRMWARE_PATH}/src)
-
-# Optional: Build tests
-option(BUILD_TESTS "Build unit tests" OFF)
-if(BUILD_TESTS)
-    message("Building tests...")
-    
-    # Test sources
-    file(GLOB_RECURSE test_sources tests/*.cpp tests/*.c)
-    list(FILTER test_sources EXCLUDE REGEX "test_main.cpp")
-    
-    # Create test executable (simplified version without GoogleTest for now)
-    add_executable(alfred_tests 
-        tests/test_main_simple.cpp
-        tests/test_config_structures_simple.cpp
-        tests/config_validator.cpp
-        ${FIRMWARE_PATH}/src/config_structures.h
-    )
-    
-    target_include_directories(alfred_tests PRIVATE 
-        src 
-        ${FIRMWARE_PATH}/src 
-        tests
-    )
-    
-    # Add test target
-    add_custom_target(run_tests
-        COMMAND alfred_tests
-        DEPENDS alfred_tests
-        COMMENT "Running Alfred component tests"
-    )
-endif()
 # target_link_libraries(sunray "${CMAKE_SOURCE_DIR}/lib/libarduino_${CMAKE_SYSTEM_PROCESSOR}.a")
 
 # target_include_directories(sunray PUBLIC ${LIBNL_INCLUDE_DIR})

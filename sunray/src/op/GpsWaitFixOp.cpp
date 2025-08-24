@@ -9,7 +9,7 @@
 #include "../../map.h"
 #include "../../events.h"
 
-String GpsWaitFixOp::getOperationName(){
+String GpsWaitFixOp::name(){
     return "GpsWaitFix";
 }
 

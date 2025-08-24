@@ -7,43 +7,20 @@
 #include "SerialRobotDriver.h"
 #include "../../config.h"
 #include "../../ioboard.h"
-#include "../config/config_structures.h"
 
 #define COMM  ROBOT
 
 //#define DEBUG_SERIAL_ROBOT 1
 
-// AT+ Protocol Error Codes
-enum ATProtocolError {
-  AT_NO_ERROR = 0,
-  AT_CRC_ERROR = 1,
-  AT_TIMEOUT_ERROR = 2,
-  AT_PARSE_ERROR = 3,
-  AT_COMM_LOST = 4
-};
-
 void SerialRobotDriver::begin(){
   CONSOLE.println("using robot driver: SerialRobotDriver");
   COMM.begin(ROBOT_BAUDRATE);
-  
-  // Initialize AT+ protocol parameters from config_alfred.h
-  motorTimeout = 100;  // Motor command timeout from config
-  summaryTimeout = 500; // Summary command timeout from config
-  maxRetries = 3;      // Maximum retries from config
-  enableCrcCheck = true; // Enable CRC validation
   encoderTicksLeft = 0;
   encoderTicksRight = 0;
   encoderTicksMow = 0;
   chargeVoltage = 0;
   chargeCurrent = 0;  
   batteryVoltage = 28;
-  // Initialize battery voltage smoothing
-  for (int i = 0; i < VOLTAGE_BUFFER_SIZE; i++) {
-    voltageBuffer[i] = 28.0; // Initialize with default voltage
-  }
-  voltageBufferIndex = 0;
-  voltageBufferCount = 0;
-  smoothedBatteryVoltage = 28.0;
   cpuTemp = 30;
   mowCurr = 0;
   motorLeftCurr = 0;
@@ -63,11 +40,6 @@ void SerialRobotDriver::begin(){
   nextTempTime = 0;
   nextWifiTime = 0;
   nextLedTime = 0;
-  lastMotorCommandTime = 0;
-  lastSummaryCommandTime = 0;
-  communicationErrors = 0;
-  lastErrorTime = 0;
-  lastErrorCode = 0;
   ledPanelInstalled = true;
   cmdMotorResponseCounter = 0;
   cmdSummaryResponseCounter = 0;
@@ -158,13 +130,8 @@ void SerialRobotDriver::begin(){
       int v = ioEepromReadByte( EEPROM_I2C_ADDR, 0);
       CONSOLE.print("EEPROM=");
       CONSOLE.println(v);
-    }    
+    }
 
-  #endif
-  
-  #ifdef ENABLE_SIMPLE_WIFI_RESTART
-    CONSOLE.println("initializing SimpleWifiRestart...");
-    simpleWifiRestart.begin();
   #endif
 }
 
@@ -240,98 +207,40 @@ void SerialRobotDriver::updateCpuTemperature(){
 }
 
 void SerialRobotDriver::updateWifiConnectionState(){
-  #ifdef ENABLE_SIMPLE_WIFI_RESTART
-    // Use SimpleWifiRestart for WiFi management
-    simpleWifiRestart.checkAndRestart();
-    
-    // Update LED states based on WiFi status
-    SimpleWifiRestart::WifiStatus status = simpleWifiRestart.getStatus();
-    ledStateWifiConnected = (status == SimpleWifiRestart::CONNECTED);
-    ledStateWifiInactive = (status == SimpleWifiRestart::DISCONNECTED || status == SimpleWifiRestart::FAILED);
-  #else
-    // Original WiFi status checking
-    #ifdef __linux__
-      //unsigned long startTime = millis();   
-      String s; 
-      while (wifiStatusProcess.available()) s+= (char)wifiStatusProcess.read(); 
-      if (s.length() > 0){    
-        s.trim();
-        //CONSOLE.print("updateWifiConnectionState state=");
-        //CONSOLE.println(s);
-        // DISCONNECTED, SCANNING, INACTIVE, COMPLETED 
-        //CONSOLE.println(s);
-        ledStateWifiConnected = (s == "COMPLETED");
-        ledStateWifiInactive = (s == "INACTIVE");                   
-      }  
-      wifiStatusProcess.runShellCommand("wpa_cli -i wlan0 status | grep wpa_state | cut -d '=' -f2");  
-      //unsigned long duration = millis() - startTime;        
-      //CONSOLE.print("updateWifiConnectionState duration: ");
-      //CONSOLE.println(duration);
-    #endif
+  #ifdef __linux__
+    //unsigned long startTime = millis();   
+    String s; 
+    while (wifiStatusProcess.available()) s+= (char)wifiStatusProcess.read(); 
+    if (s.length() > 0){    
+      s.trim();
+      //CONSOLE.print("updateWifiConnectionState state=");
+      //CONSOLE.println(s);
+      // DISCONNECTED, SCANNING, INACTIVE, COMPLETED 
+      //CONSOLE.println(s);
+      ledStateWifiConnected = (s == "COMPLETED");
+      ledStateWifiInactive = (s == "INACTIVE");                   
+    }  
+    wifiStatusProcess.runShellCommand("wpa_cli -i wlan0 status | grep wpa_state | cut -d '=' -f2");  
+    //unsigned long duration = millis() - startTime;        
+    //CONSOLE.print("updateWifiConnectionState duration: ");
+    //CONSOLE.println(duration);
   #endif
 }
 
-// Battery voltage smoothing implementation
-void SerialRobotDriver::updateBatteryVoltageSmoothing(float newVoltage) {
-  // Add new voltage to circular buffer
-  voltageBuffer[voltageBufferIndex] = newVoltage;
-  voltageBufferIndex = (voltageBufferIndex + 1) % VOLTAGE_BUFFER_SIZE;
-  
-  // Track how many values we have (up to buffer size)
-  if (voltageBufferCount < VOLTAGE_BUFFER_SIZE) {
-    voltageBufferCount++;
-  }
-  
-  // Calculate moving average
-  float sum = 0.0;
-  for (int i = 0; i < voltageBufferCount; i++) {
-    sum += voltageBuffer[i];
-  }
-  smoothedBatteryVoltage = sum / voltageBufferCount;
-  
-  #ifdef DEBUG_SERIAL_ROBOT
-    CONSOLE.print("Battery voltage: raw=");
-    CONSOLE.print(newVoltage);
-    CONSOLE.print("V, smoothed=");
-    CONSOLE.print(smoothedBatteryVoltage);
-    CONSOLE.print("V, samples=");
-    CONSOLE.println(voltageBufferCount);
-  #endif
-}
-
-float SerialRobotDriver::getSmoothedBatteryVoltage() {
-  return smoothedBatteryVoltage;
-}
-
-// send serial request to MCU with enhanced error handling
+// send serial request to MCU
 void SerialRobotDriver::sendRequest(String s){
-  // Check for communication timeout
-  unsigned long currentTime = millis();
-  
-  // Calculate CRC
   byte crc = 0;
   for (int i=0; i < s.length(); i++) crc += s[i];
-  
-  // Format command with CRC
   s += F(",0x");
   if (crc <= 0xF) s += F("0");
   s += String(crc, HEX);  
   s += F("\r\n");             
-  
   #ifdef DEBUG_SERIAL_ROBOT
     CONSOLE.print("SerialRobot request: ");
     CONSOLE.println(s);  
   #endif
-  
-  // Send command
-  COMM.print(s);
-  
-  // Update timing for timeout detection
-  if (s.startsWith("AT+M")) {
-    lastMotorCommandTime = currentTime;
-  } else if (s.startsWith("AT+S")) {
-    lastSummaryCommandTime = currentTime;
-  }
+  //cmdResponse = s;
+  COMM.print(s);  
 }
 
 
@@ -370,286 +279,142 @@ void SerialRobotDriver::requestMotorPwm(int leftPwm, int rightPwm, int mowPwm){
 }
 
 void SerialRobotDriver::motorResponse(){
-  if (cmd.length() < 6) {
-    CONSOLE.println("WARN: Motor response too short");
-    communicationErrors++;
-    return;
-  }
-  
+  if (cmd.length()<6) return;  
   int counter = 0;
   int lastCommaIdx = 0;
-  
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    
+    //Serial.print("ch=");
+    //Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
-      String valueStr = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1);
-      int intValue = valueStr.toInt();
-      float floatValue = valueStr.toFloat();
-      
-      switch(counter) {
-        case 1:
-          encoderTicksRight = intValue;
-          break;
-        case 2:
-          encoderTicksLeft = intValue;
-          break;
-        case 3:
-          encoderTicksMow = intValue;
-          break;
-        case 4:
-          chargeVoltage = floatValue;
-          break;
-        case 5:
-          triggeredLeftBumper = (intValue != 0);
-          break;
-        case 6:
-          triggeredLift = (intValue != 0);
-          break;
-        case 7:
-          triggeredStopButton = (intValue != 0);
-          if (triggeredStopButton) {
-            CONSOLE.println("INFO: Stop button triggered");
-          }
-          break;
-        default:
-          // Handle unexpected parameters
-          #ifdef DEBUG_SERIAL_ROBOT
-            CONSOLE.print("WARN: Unexpected motor parameter at position ");
-            CONSOLE.print(counter);
-            CONSOLE.print(": ");
-            CONSOLE.println(valueStr);
-          #endif
-          break;
-      }
-      
+      int intValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toInt();
+      float floatValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();      
+      if (counter == 1){                            
+        encoderTicksRight = intValue;  // ag
+      } else if (counter == 2){
+        encoderTicksLeft = intValue;   // ag
+      } else if (counter == 3){
+        encoderTicksMow = intValue;
+      } else if (counter == 4){
+        chargeVoltage = floatValue;
+      } else if (counter == 5){
+        triggeredLeftBumper = (intValue != 0);
+      } else if (counter == 6){
+        triggeredLift = (intValue != 0);
+      } else if (counter == 7){
+        triggeredStopButton = (intValue != 0);
+      } 
       counter++;
       lastCommaIdx = idx;
     }    
   }
-  
-  // Update response statistics
+  if (triggeredStopButton){
+    //CONSOLE.println("STOPBUTTON");
+  }
+  //CONSOLE.println(encoderTicksMow);
   cmdMotorResponseCounter++;
-  mcuCommunicationLost = false;
-  
-  #ifdef DEBUG_SERIAL_ROBOT
-    CONSOLE.print("Motor response: L=");
-    CONSOLE.print(encoderTicksLeft);
-    CONSOLE.print(", R=");
-    CONSOLE.print(encoderTicksRight);
-    CONSOLE.print(", M=");
-    CONSOLE.println(encoderTicksMow);
-  #endif
+  mcuCommunicationLost=false;
 }
 
 
 void SerialRobotDriver::versionResponse(){
-  if (cmd.length() < 6) {
-    CONSOLE.println("WARN: Version response too short");
-    communicationErrors++;
-    return;
-  }
-  
+  if (cmd.length()<6) return;  
   int counter = 0;
   int lastCommaIdx = 0;
-  
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    
+    //Serial.print("ch=");
+    //Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
       String s = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1);
-      s.trim(); // Remove whitespace
-      
-      switch(counter) {
-        case 1:
-          mcuFirmwareName = s;
-          break;
-        case 2:
-          mcuFirmwareVersion = s;
-          break;
-        default:
-          #ifdef DEBUG_SERIAL_ROBOT
-            CONSOLE.print("WARN: Unexpected version parameter at position ");
-            CONSOLE.print(counter);
-            CONSOLE.print(": ");
-            CONSOLE.println(s);
-          #endif
-          break;
-      }
-      
+      if (counter == 1){                            
+        mcuFirmwareName = s;
+      } else if (counter == 2){
+        mcuFirmwareVersion = s;
+      } 
       counter++;
       lastCommaIdx = idx;
     }    
   }
-  
-  // Update communication status
-  mcuCommunicationLost = false;
-  
   CONSOLE.print("MCU FIRMWARE: ");
   CONSOLE.print(mcuFirmwareName);
   CONSOLE.print(",");
   CONSOLE.println(mcuFirmwareVersion);
-  
-  #ifdef DEBUG_SERIAL_ROBOT
-    CONSOLE.println("Version response processed successfully");
-  #endif
 }
 
 
 void SerialRobotDriver::summaryResponse(){
-  if (cmd.length() < 6) {
-    CONSOLE.println("WARN: Summary response too short");
-    communicationErrors++;
-    return;
-  }
-  
+  if (cmd.length()<6) return;  
   int counter = 0;
   int lastCommaIdx = 0;
-  
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    
+    //Serial.print("ch=");
+    //Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
-      String valueStr = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1);
-      int intValue = valueStr.toInt();
-      float floatValue = valueStr.toFloat();
-      
-      switch(counter) {
-        case 1:
-          batteryVoltage = floatValue;
-          updateBatteryVoltageSmoothing(floatValue);
-          break;
-        case 2:
-          chargeVoltage = floatValue;
-          break;
-        case 3:
-          chargeCurrent = floatValue;
-          break;
-        case 4:
-          triggeredLift = (intValue != 0);
-          break;
-        case 5:
-          triggeredLeftBumper = (intValue != 0);
-          break;
-        case 6:
-          triggeredRain = (intValue != 0);
-          break;
-        case 7:
-          motorFault = (intValue != 0);
-          if (motorFault) {
-            CONSOLE.println("WARN: Motor fault detected");
-          }
-          break;
-        case 8:
-          mowCurr = floatValue;
-          // Check for mow motor overcurrent using config_alfred.h constant
-          #ifdef MOTOR_FAULT_CURRENT
-          if (abs(mowCurr) > MOTOR_FAULT_CURRENT) {
-            CONSOLE.print("WARN: Mow motor overcurrent: ");
-            CONSOLE.print(mowCurr);
-            CONSOLE.print("A > ");
-            CONSOLE.print(MOTOR_FAULT_CURRENT);
-            CONSOLE.println("A");
-          }
-          #endif
-          break;
-        case 9:
-          motorLeftCurr = floatValue;
-          // Check for left motor overcurrent
-          #ifdef MOTOR_FAULT_CURRENT
-          if (abs(motorLeftCurr) > MOTOR_FAULT_CURRENT) {
-            CONSOLE.print("WARN: Left motor overcurrent: ");
-            CONSOLE.print(motorLeftCurr);
-            CONSOLE.print("A > ");
-            CONSOLE.print(MOTOR_FAULT_CURRENT);
-            CONSOLE.println("A");
-          }
-          #endif
-          break;
-        case 10:
-          motorRightCurr = floatValue;
-          // Check for right motor overcurrent
-          #ifdef MOTOR_FAULT_CURRENT
-          if (abs(motorRightCurr) > MOTOR_FAULT_CURRENT) {
-            CONSOLE.print("WARN: Right motor overcurrent: ");
-            CONSOLE.print(motorRightCurr);
-            CONSOLE.print("A > ");
-            CONSOLE.print(MOTOR_FAULT_CURRENT);
-            CONSOLE.println("A");
-          }
-          #endif
-          break;
-        case 11:
-          batteryTemp = floatValue;
-          break;
-        default:
-          // Handle unexpected parameters
-          #ifdef DEBUG_SERIAL_ROBOT
-            CONSOLE.print("WARN: Unexpected summary parameter at position ");
-            CONSOLE.print(counter);
-            CONSOLE.print(": ");
-            CONSOLE.println(valueStr);
-          #endif
-          break;
-      }
-      
+      int intValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toInt();      
+      float floatValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();      
+      if (counter == 1){                            
+        batteryVoltage = floatValue;
+      } else if (counter == 2){
+        chargeVoltage = floatValue;
+      } else if (counter == 3){
+        chargeCurrent = floatValue;
+      } else if (counter == 4){
+        triggeredLift = (intValue != 0);
+      } else if (counter == 5){
+        triggeredLeftBumper = (intValue != 0);
+      } else if (counter == 6){
+        triggeredRain = (intValue != 0);
+      } else if (counter == 7){
+        motorFault = (intValue != 0);
+      } else if (counter == 8){
+        //CONSOLE.println(cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1));
+        mowCurr = floatValue;
+      } else if (counter == 9){
+        motorLeftCurr = floatValue;
+      } else if (counter == 10){
+        motorRightCurr = floatValue;
+      } else if (counter == 11){
+        batteryTemp = floatValue;
+      } 
       counter++;
       lastCommaIdx = idx;
     }    
   }
-  
-  // Update response statistics
   cmdSummaryResponseCounter++;
-  mcuCommunicationLost = false;
-  
-  #ifdef DEBUG_SERIAL_ROBOT
-    CONSOLE.print("Summary: Batt=");
-    CONSOLE.print(batteryVoltage);
-    CONSOLE.print("V, Currents: L=");
-    CONSOLE.print(motorLeftCurr);
-    CONSOLE.print("A, R=");
-    CONSOLE.print(motorRightCurr);
-    CONSOLE.print("A, M=");
-    CONSOLE.print(mowCurr);
-    CONSOLE.println("A");
-  #endif
+  /*CONSOLE.print("motor currents=");
+  CONSOLE.print(mowCurr);
+  CONSOLE.print(",");
+  CONSOLE.print(motorLeftCurr);
+  CONSOLE.print(",");
+  CONSOLE.println(motorRightCurr);*/
+  //CONSOLE.print("batteryTemp=");
+  //CONSOLE.println(batteryTemp);
 }
 
-// process response with enhanced error handling
+// process response
 void SerialRobotDriver::processResponse(bool checkCrc){
   cmdResponse = "";      
-  if (cmd.length() < 4) {
-    communicationErrors++;
-    lastErrorTime = millis();
-    return;
-  }
-  
+  if (cmd.length() < 4) return;
   byte expectedCrc = 0;
   int idx = cmd.lastIndexOf(',');
-  
   if (idx < 1){
-    if (checkCrc && enableCrcCheck){
-      CONSOLE.println("SerialRobot: CRC ERROR - No CRC found");
-      communicationErrors++;
-      lastErrorTime = millis();
+    if (checkCrc){
+      CONSOLE.println("SerialRobot: CRC ERROR");
       return;
     }
   } else {
-    // Calculate expected CRC
     for (int i=0; i < idx; i++) expectedCrc += cmd[i];  
     String s = cmd.substring(idx+1, idx+5);
     int crc = strtol(s.c_str(), NULL, 16);  
-    
     if (expectedCrc != crc){
-      if (checkCrc && enableCrcCheck){
-        CONSOLE.print("SerialRobot: CRC ERROR - Expected: 0x");
-        CONSOLE.print(expectedCrc,HEX);
-        CONSOLE.print(", Got: 0x");
+      if (checkCrc){
+        CONSOLE.print("SerialRobot: CRC ERROR");
         CONSOLE.print(crc,HEX);
+        CONSOLE.print(",");
+        CONSOLE.print(expectedCrc,HEX);
         CONSOLE.println();
-        communicationErrors++;
-        lastErrorTime = millis();
-        lastErrorCode = static_cast<uint16_t>(RobotErrorCode::ERROR_COMM_CRC);
         return;  
       }      
     } else {
@@ -658,59 +423,12 @@ void SerialRobotDriver::processResponse(bool checkCrc){
         CONSOLE.println(cmd);
       #endif
       // remove CRC      
-      cmd = cmd.substring(0, idx);
-      
-      // Reset communication lost flag on successful response
-      mcuCommunicationLost = false;
+      cmd = cmd.substring(0, idx);      
     }    
   }     
-  
-  // Process different response types
   if (cmd[0] == 'M') motorResponse();
-  else if (cmd[0] == 'S') summaryResponse();
-  else if (cmd[0] == 'V') versionResponse();
-  #ifdef ENABLE_SIMPLE_WIFI_RESTART
-  else if (cmd.startsWith("AT+WIFI_RESTART")) {
-    // Manual WiFi restart command
-    simpleWifiRestart.forceRestart();
-    COMM.println("OK");
-  }
-  else if (cmd.startsWith("AT+WIFI_STATUS")) {
-    // WiFi status query command
-    SimpleWifiRestart::WifiStatus status = simpleWifiRestart.getStatus();
-    COMM.print("WIFI_STATUS:");
-    switch(status) {
-      case SimpleWifiRestart::CONNECTED:
-        COMM.println("CONNECTED");
-        break;
-      case SimpleWifiRestart::DISCONNECTED:
-        COMM.println("DISCONNECTED");
-        break;
-      case SimpleWifiRestart::RESTARTING:
-        COMM.println("RESTARTING");
-        break;
-      case SimpleWifiRestart::FAILED:
-        COMM.println("FAILED");
-        break;
-      default:
-        COMM.println("UNKNOWN");
-        break;
-    }
-  }
-  else if (cmd.startsWith("AT+WIFI_CONFIG")) {
-    // WiFi configuration command
-    COMM.print("WIFI_CONFIG:timeout=");
-    COMM.print(simpleWifiRestart.getRestartTimeout());
-    COMM.print(",interval=");
-    COMM.println(simpleWifiRestart.getCheckInterval());
-  }
-  #endif
-  else {
-    CONSOLE.print("SerialRobot: Unknown response type: ");
-    CONSOLE.println(cmd[0]);
-    communicationErrors++;
-    lastErrorTime = millis();
-  }
+  if (cmd[0] == 'S') summaryResponse();
+  if (cmd[0] == 'V') versionResponse();
 }
 
 
@@ -768,75 +486,40 @@ void SerialRobotDriver::updatePanelLEDs(){
 
 void SerialRobotDriver::run(){  
   processComm();
-  
-  unsigned long currentTime = millis();
-  
-  // Motor control loop - 50 Hz
-  if (currentTime > nextMotorTime){
-    nextMotorTime = currentTime + 20;
+  if (millis() > nextMotorTime){
+    nextMotorTime = millis() + 20; // 50 hz
     requestMotorPwm(requestLeftPwm, requestRightPwm, requestMowPwm);
-    
-    // Check for motor command timeout
-    if (lastMotorCommandTime > 0 && (currentTime - lastMotorCommandTime) > motorTimeout) {
-      CONSOLE.println("WARN: Motor command timeout");
-      mcuCommunicationLost = true;
-      communicationErrors++;
-      lastErrorCode = static_cast<uint16_t>(RobotErrorCode::ERROR_COMM_TIMEOUT);
-    }
   }
-  
-  // Summary request loop - 2 Hz
-  if (currentTime > nextSummaryTime){
-    nextSummaryTime = currentTime + 500;
+  if (millis() > nextSummaryTime){
+    nextSummaryTime = millis() + 500; // 2 hz
     requestSummary();
-    
-    // Check for summary command timeout
-    if (lastSummaryCommandTime > 0 && (currentTime - lastSummaryCommandTime) > summaryTimeout) {
-      CONSOLE.println("WARN: Summary command timeout");
-      mcuCommunicationLost = true;
-      communicationErrors++;
-      lastErrorCode = static_cast<uint16_t>(RobotErrorCode::ERROR_COMM_TIMEOUT);
-    }
   }
-  
-  // Status monitoring loop - 1 Hz
-  if (currentTime > nextConsoleTime){
-    nextConsoleTime = currentTime + 1000;
-    
-    // Request version if not known and communication is working
-    if (!mcuCommunicationLost && mcuFirmwareName == ""){
-      requestVersion();
-    }
-    
-    // Check communication health
+  if (millis() > nextConsoleTime){
+    nextConsoleTime = millis() + 1000;  // 1 hz    
+    if (!mcuCommunicationLost){
+      if (mcuFirmwareName == ""){
+        requestVersion();
+      }
+    }    
     if ((cmdMotorCounter > 0) && (cmdMotorResponseCounter == 0)){
-      CONSOLE.println("WARN: No motor responses - resetting motor ticks");
+      CONSOLE.println("WARN: resetting motor ticks");
       resetMotorTicks = true;
       mcuCommunicationLost = true;
-    }
-    
-    // Communication frequency monitoring
-    if (cmdMotorResponseCounter < 30) {
-      CONSOLE.print("WARN: Low communication frequency - Motor: ");
-      CONSOLE.print(cmdMotorResponseCounter);
-      CONSOLE.print("/");
+    }    
+    if ( (cmdMotorResponseCounter < 30) ) { // || (cmdSummaryResponseCounter == 0) ){
+      CONSOLE.print("WARN: SerialRobot unmet communication frequency: motorFreq=");
       CONSOLE.print(cmdMotorCounter);
-      CONSOLE.print(", Summary: ");
-      CONSOLE.print(cmdSummaryResponseCounter);
       CONSOLE.print("/");
+      CONSOLE.print(cmdMotorResponseCounter);
+      CONSOLE.print("  summaryFreq=");
       CONSOLE.print(cmdSummaryCounter);
-      CONSOLE.print(", Errors: ");
-      CONSOLE.println(communicationErrors);
-      
+      CONSOLE.print("/");
+      CONSOLE.println(cmdSummaryResponseCounter);
       if (cmdMotorResponseCounter == 0){
-        // Reset motor control on complete communication loss
-        mcuCommunicationLost = true;
+        // FIXME: maybe reset motor PID controls here?
       }
-    }
-    
-    // Reset counters
-    cmdMotorCounter = cmdMotorResponseCounter = cmdSummaryCounter = cmdSummaryResponseCounter = 0;
-    communicationErrors = 0;
+    }     
+    cmdMotorCounter=cmdMotorResponseCounter=cmdSummaryCounter=cmdSummaryResponseCounter=0;    
   }  
   if (millis() > nextLedTime){
     nextLedTime = millis() + 3000;  // 3 sec
@@ -1031,8 +714,7 @@ float SerialBatteryDriver::getBatteryVoltage(){
       return 28;      
     }
   #endif         
-  // Return smoothed battery voltage for more stable readings
-  return serialRobot.getSmoothedBatteryVoltage();
+  return serialRobot.batteryVoltage;
 }
 
 float SerialBatteryDriver::getChargeVoltage(){

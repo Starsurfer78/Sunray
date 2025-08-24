@@ -11,8 +11,7 @@
 
 
 void Motor::begin() {
-  // Initialize PWM limits from config_alfred.h
-  pwmMax = MOTOR_PID_LIMIT;
+	pwmMax = MOTOR_PID_LIMIT;
  
   #ifdef MAX_MOW_PWM
     if (MAX_MOW_PWM <= 255) {
@@ -24,16 +23,28 @@ void Motor::begin() {
   #endif
   
   pwmSpeedOffset = 1.0;
+  
   mowHeightMillimeter = 50;
 
-  // Initialize mechanical parameters from config_alfred.h
+  //ticksPerRevolution = 1060/2;
   ticksPerRevolution = TICKS_PER_REVOLUTION;
-  wheelBaseCm = WHEEL_BASE_CM;    // wheel-to-wheel distance (cm)
+	wheelBaseCm = WHEEL_BASE_CM;    // wheel-to-wheel distance (cm) 36
   wheelDiameter = WHEEL_DIAMETER; // wheel diameter (mm)
-  ticksPerCm = ((float)ticksPerRevolution) / (((float)wheelDiameter)/10.0) / 3.1415;    // computes encoder ticks per cm
+  ticksPerCm         = ((float)ticksPerRevolution) / (((float)wheelDiameter)/10.0) / 3.1415;    // computes encoder ticks per cm (do not change)  
 
-  // Initialize PID controllers and low-pass filters
-  initializePidAndLpfControllers();
+  motorLeftPID.Kp       = MOTOR_PID_KP;  // 2.0;  
+  motorLeftPID.Ki       = MOTOR_PID_KI;  // 0.03; 
+  motorLeftPID.Kd       = MOTOR_PID_KD;  // 0.03;
+  motorLeftPID.reset(); 
+  motorRightPID.Kp       = motorLeftPID.Kp;
+  motorRightPID.Ki       = motorLeftPID.Ki;
+  motorRightPID.Kd       = motorLeftPID.Kd;
+  motorRightPID.reset();		 
+
+  motorLeftLpf.Tf = MOTOR_PID_LP;
+  motorLeftLpf.reset();
+  motorRightLpf.Tf = MOTOR_PID_LP;  
+  motorRightLpf.reset();
 
   robotPitch = 0;
   #ifdef MOTOR_DRIVER_BRUSHLESS
@@ -236,9 +247,16 @@ void Motor::stopImmediately(bool includeMowerMotor){
 
 
 void Motor::run() {
-  if (millis() < lastControlTime + MOTOR_CONTROL_INTERVAL_MS) return;
+  if (millis() < lastControlTime + 50) return;
   
-  handleLinearAngularSpeedTimeout();
+  if (setLinearAngularSpeedTimeoutActive){
+    if (millis() > setLinearAngularSpeedTimeout){
+      //CONSOLE.println("Motor::run - LinearAngularSpeedTimeout");
+      setLinearAngularSpeedTimeoutActive = false;
+      motorLeftRpmSet = 0;
+      motorRightRpmSet = 0;
+    }
+  }
     
   sense();        
 
@@ -246,17 +264,79 @@ void Motor::run() {
   // if motor driver uses too much current, try a recovery     
   // if there is some error (odometry, too low current, rpm fault), try a recovery 
   if (!recoverMotorFault) {
-    if (detectMotorFaults()){
+    bool someFault = ( (checkFault()) || (checkCurrentTooHighError()) || (checkMowRpmFault()) 
+                         || (checkOdometryError()) || (checkCurrentTooLowError()) );
+    if (someFault){
       stopImmediately(true);
       recoverMotorFault = true;
-      nextRecoverMotorFaultTime = millis() + MOTOR_FAULT_RECOVERY_DELAY_MS;                  
+      nextRecoverMotorFaultTime = millis() + 1000;                  
       motorRecoveryState = true;
     } 
   } 
 
-  handleMotorRecovery();
+  // try to recover from a motor driver fault signal by resetting the motor driver fault
+  // if it fails, indicate a motor error to the robot control (so it can try an obstacle avoidance)  
+  if (nextRecoverMotorFaultTime != 0){
+    if (millis() > nextRecoverMotorFaultTime){
+      if (recoverMotorFault){
+        nextRecoverMotorFaultTime = millis() + 10000;
+        recoverMotorFaultCounter++;                                               
+        CONSOLE.print("motor fault recover counter ");
+        CONSOLE.println(recoverMotorFaultCounter);
+        motorDriver.resetMotorFaults();
+        recoverMotorFault = false;  
+        if (recoverMotorFaultCounter >= 10){ // too many successive motor faults
+          //stopImmediately();
+          CONSOLE.println("ERROR: motor recovery failed");
+          recoverMotorFaultCounter = 0;
+          motorError = true;
+        }
+      } else {
+        CONSOLE.println("resetting recoverMotorFaultCounter");
+        recoverMotorFaultCounter = 0;
+        nextRecoverMotorFaultTime = 0;
+        motorRecoveryState = false;
+      }        
+    }
+  }
   
-  processEncoderTicksAndCalculateRpm();
+  int ticksLeft;
+  int ticksRight;
+  int ticksMow;
+  motorDriver.getMotorEncoderTicks(ticksLeft, ticksRight, ticksMow);  
+  
+  if (motorLeftPWMCurr < 0) ticksLeft *= -1;
+  if (motorRightPWMCurr < 0) ticksRight *= -1;
+  if (motorMowPWMCurr < 0) ticksMow *= -1;
+  motorLeftTicks += ticksLeft;
+  motorRightTicks += ticksRight;
+  motorMowTicks += ticksMow;
+  //CONSOLE.println(motorMowTicks);
+
+  unsigned long currTime = millis();
+  float deltaControlTimeSec =  ((float)(currTime - lastControlTime)) / 1000.0;
+  lastControlTime = currTime;
+
+  // calculate speed via tick count
+  // 2000 ticksPerRevolution: @ 30 rpm  => 0.5 rps => 1000 ticksPerSec
+  // 20 ticksPerRevolution: @ 30 rpm => 0.5 rps => 10 ticksPerSec
+  motorLeftRpmCurr = 60.0 * ( ((float)ticksLeft) / ((float)ticksPerRevolution) ) / deltaControlTimeSec;
+  motorRightRpmCurr = 60.0 * ( ((float)ticksRight) / ((float)ticksPerRevolution) ) / deltaControlTimeSec;
+  motorMowRpmCurr = 60.0 * ( ((float)ticksMow) / ((float)6.0) ) / deltaControlTimeSec; // assuming 6 ticks per revolution
+  float lp = 0.9; // 0.995
+  motorLeftRpmCurrLP = lp * motorLeftRpmCurrLP + (1.0-lp) * motorLeftRpmCurr;
+  motorRightRpmCurrLP = lp * motorRightRpmCurrLP + (1.0-lp) * motorRightRpmCurr;
+  motorMowRpmCurrLP = lp * motorMowRpmCurrLP + (1.0-lp) * motorMowRpmCurr;
+  
+  if (ticksLeft == 0) {
+    motorLeftTicksZero++;
+    if (motorLeftTicksZero > 2) motorLeftRpmCurr = 0;
+  } else motorLeftTicksZero = 0;
+
+  if (ticksRight == 0) {
+    motorRightTicksZero++;
+    if (motorRightTicksZero > 2) motorRightRpmCurr = 0;
+  } else motorRightTicksZero = 0;
 
   // speed controller
   control();    
@@ -270,34 +350,14 @@ bool Motor::checkCurrentTooHighError(){
   bool motorLeftFault = (motorLeftSense > MOTOR_FAULT_CURRENT);
   bool motorRightFault = (motorRightSense > MOTOR_FAULT_CURRENT);
   bool motorMowFault = (motorMowSense > MOW_FAULT_CURRENT);
-  
   if (motorLeftFault || motorRightFault || motorMowFault){
-    CONSOLE.print("ERROR: Motor current too high - ");
-    
-    if (motorLeftFault) {
-      logMotorCurrentError("Left", motorLeftSense, MOTOR_FAULT_CURRENT, ">");
-    }
-    
-    if (motorRightFault) {
-      logMotorCurrentError("Right", motorRightSense, MOTOR_FAULT_CURRENT, ">");
-    }
-    
-    if (motorMowFault) {
-      logMotorCurrentError("Mow", motorMowSense, MOW_FAULT_CURRENT, ">");
-    }
-    
-    CONSOLE.println();
-    
-    #ifdef DEBUG_MOTOR
-      CONSOLE.print("Current readings: L=");
-      CONSOLE.print(motorLeftSense);
-      CONSOLE.print("A, R=");
-      CONSOLE.print(motorRightSense);
-      CONSOLE.print("A, M=");
-      CONSOLE.print(motorMowSense);
-      CONSOLE.println("A");
-    #endif
-    
+    CONSOLE.print("ERROR motor current too high: ");
+    CONSOLE.print("  current=");
+    CONSOLE.print(motorLeftSense);
+    CONSOLE.print(",");
+    CONSOLE.print(motorRightSense);
+    CONSOLE.print(",");
+    CONSOLE.println(motorMowSense);
     return true;
   } 
   return false; 
@@ -306,45 +366,14 @@ bool Motor::checkCurrentTooHighError(){
 
 // check if motor current too low
 bool Motor::checkCurrentTooLowError(){
-  bool motorLeftTooLow = false;
-  bool motorRightTooLow = false;
-  bool motorMowTooLow = false;
-  
-  // Check if motors are running but not consuming expected current
-  #ifdef MOTOR_TOO_LOW_CURRENT
-    if ((abs(motorLeftPWMCurr) > 100) && (abs(motorLeftPWMCurrLP) > 100) && (motorLeftSenseLP < MOTOR_TOO_LOW_CURRENT)) {
-      motorLeftTooLow = true;
-    }
-    if ((abs(motorRightPWMCurr) > 100) && (abs(motorRightPWMCurrLP) > 100) && (motorRightSenseLP < MOTOR_TOO_LOW_CURRENT)) {
-      motorRightTooLow = true;
-    }
-  #endif
-  
-  #ifdef MOW_TOO_LOW_CURRENT
-    if ((abs(motorMowPWMCurr) > 100) && (abs(motorMowPWMCurrLP) > 100) && (motorMowSenseLP < MOW_TOO_LOW_CURRENT)) {
-      motorMowTooLow = true;
-    }
-  #endif
-  
-  if (motorLeftTooLow || motorRightTooLow || motorMowTooLow) {
-    CONSOLE.print("WARN: Motor current too low - ");
-    
-    if (motorLeftTooLow) {
-      logMotorCurrentError("Left", motorLeftSenseLP, MOTOR_TOO_LOW_CURRENT, "<", motorLeftPWMCurr);
-    }
-    
-    if (motorRightTooLow) {
-      logMotorCurrentError("Right", motorRightSenseLP, MOTOR_TOO_LOW_CURRENT, "<", motorRightPWMCurr);
-    }
-    
-    if (motorMowTooLow) {
-      logMotorCurrentError("Mow", motorMowSenseLP, MOW_TOO_LOW_CURRENT, "<", motorMowPWMCurr);
-    }
-    
-    CONSOLE.println();
-    
+  //CONSOLE.print(motorRightPWMCurr);
+  //CONSOLE.print(",");
+  //CONSOLE.println(motorRightSenseLP);
+  if  (    ( (abs(motorMowPWMCurr) > 100) && (abs(motorMowPWMCurrLP) > 100) && (motorMowSenseLP < MOW_TOO_LOW_CURRENT)) 
+        ||  ( (abs(motorLeftPWMCurr) > 100) && (abs(motorLeftPWMCurrLP) > 100) && (motorLeftSenseLP < MOTOR_TOO_LOW_CURRENT))    
+        ||  ( (abs(motorRightPWMCurr) > 100) && (abs(motorRightPWMCurrLP) > 100) && (motorRightSenseLP < MOTOR_TOO_LOW_CURRENT))  ){        
     // at least one motor is not consuming current      
-    // first try recovery, then indicate a motor error to the robot control (so it can try an obstacle avoidance)    
+    // first try reovery, then indicate a motor error to the robot control (so it can try an obstacle avoidance)    
     CONSOLE.print("ERROR: motor current too low: pwm (left,right,mow)=");
     CONSOLE.print(motorLeftPWMCurr);
     CONSOLE.print(",");
@@ -373,15 +402,15 @@ bool Motor::checkFault() {
     motorDriver.getMotorFaults(leftFault, rightFault, mowFault);
   }
   if (leftFault) {
-    logMotorFaultError("left", "fault");
+    CONSOLE.println("Error: motor driver left signaled fault");
     fault = true;
   }
   if  (rightFault) {
-    logMotorFaultError("right", "fault");
+    CONSOLE.println("Error: motor driver right signaled fault"); 
     fault = true;
   }
   if (mowFault) {
-    logMotorFaultError("mow", "fault");
+    CONSOLE.println("Error: motor driver mow signaled fault");
     fault = true;
   }
   return fault;
@@ -454,160 +483,77 @@ bool Motor::checkMowRpmFault(){
 // measure motor currents
 void Motor::sense(){
   if (millis() < nextSenseTime) return;
-  nextSenseTime = millis() + SENSE_INTERVAL_MS;
-  
-  // Read current sensor values
+  nextSenseTime = millis() + 20;
   motorDriver.getMotorCurrent(motorLeftSense, motorRightSense, motorMowSense);
-  
-  // Apply filtering to measurements
-  applyCurrentFiltering();
-  
-  // Calculate normalized currents with pitch compensation
-  calculateNormalizedCurrents();
-
-  // Check for motor overload conditions
-  checkOverload();  
-}
-
-
-float Motor::calculatePitchFactor(int motorPWMCurr, float cosPitch) const {
-  // Calculate pitch compensation factor based on motor direction and robot pitch
-  if (((motorPWMCurr >= 0) && (robotPitch <= 0)) || ((motorPWMCurr < 0) && (robotPitch >= 0)))
-    return cosPitch;
-  else 
-    return 2.0f - cosPitch;
-}
-
-
-void Motor::applyCurrentFiltering() {
-  // Apply low-pass filter to current measurements
-  motorRightSenseLP = CURRENT_LP_FILTER_COEFF * motorRightSenseLP + (1.0f - CURRENT_LP_FILTER_COEFF) * motorRightSense;
-  motorLeftSenseLP = CURRENT_LP_FILTER_COEFF * motorLeftSenseLP + (1.0f - CURRENT_LP_FILTER_COEFF) * motorLeftSense;
-  motorMowSenseLP = CURRENT_LP_FILTER_COEFF * motorMowSenseLP + (1.0f - CURRENT_LP_FILTER_COEFF) * motorMowSense; 
+  float lp = 0.995; // 0.9
+  motorRightSenseLP = lp * motorRightSenseLP + (1.0-lp) * motorRightSense;
+  motorLeftSenseLP = lp * motorLeftSenseLP + (1.0-lp) * motorLeftSense;
+  motorMowSenseLP = lp * motorMowSenseLP + (1.0-lp) * motorMowSense; 
   motorsSenseLP = motorRightSenseLP + motorLeftSenseLP + motorMowSenseLP;
-  
-  // Apply low-pass filter to PWM values
-  motorRightPWMCurrLP = CURRENT_LP_FILTER_COEFF * motorRightPWMCurrLP + (1.0f - CURRENT_LP_FILTER_COEFF) * ((float)motorRightPWMCurr);
-  motorLeftPWMCurrLP = CURRENT_LP_FILTER_COEFF * motorLeftPWMCurrLP + (1.0f - CURRENT_LP_FILTER_COEFF) * ((float)motorLeftPWMCurr);
-  motorMowPWMCurrLP = MOW_PWM_LP_FILTER_COEFF * motorMowPWMCurrLP + (1.0f - MOW_PWM_LP_FILTER_COEFF) * ((float)motorMowPWMCurr);
-}
+  motorRightPWMCurrLP = lp * motorRightPWMCurrLP + (1.0-lp) * ((float)motorRightPWMCurr);
+  motorLeftPWMCurrLP = lp * motorLeftPWMCurrLP + (1.0-lp) * ((float)motorLeftPWMCurr);
+  lp = 0.99;
+  motorMowPWMCurrLP = lp * motorMowPWMCurrLP + (1.0-lp) * ((float)motorMowPWMCurr); 
+ 
+  // compute normalized current (normalized to 1g gravity)
+  //float leftAcc = (motorLeftRpmCurr - motorLeftRpmLast) / deltaControlTimeSec;
+  //float rightAcc = (motorRightRpmCurr - motorRightRpmLast) / deltaControlTimeSec;
+  float cosPitch = cos(robotPitch); 
+	float pitchfactor;
+  float robotMass = 1.0;
+	// left wheel friction
+	if (  ((motorLeftPWMCurr >= 0) && (robotPitch <= 0)) || ((motorLeftPWMCurr < 0) && (robotPitch >= 0)) )
+		pitchfactor = cosPitch; // decrease by angle
+	else 
+		pitchfactor = 2.0-cosPitch;  // increase by angle
+	motorLeftSenseLPNorm = abs(motorLeftSenseLP) * robotMass * pitchfactor;  
+	// right wheel friction
+	if (  ((motorRightPWMCurr >= 0) && (robotPitch <= 0)) || ((motorRightPWMCurr < 0) && (robotPitch >= 0)) )
+		pitchfactor = cosPitch;  // decrease by angle
+	else 
+		pitchfactor = 2.0-cosPitch; // increase by angle
+  motorRightSenseLPNorm = abs(motorRightSenseLP) * robotMass * pitchfactor; 
 
-
-void Motor::calculateNormalizedCurrents() {
-  // Compute normalized current (normalized to 1g gravity)
-  float cosPitch = cos(robotPitch);
-  
-  // Calculate normalized current with pitch compensation
-  float leftPitchFactor = calculatePitchFactor(motorLeftPWMCurr, cosPitch);
-  motorLeftSenseLPNorm = motorLeftSenseLP / leftPitchFactor / ROBOT_MASS_FACTOR;
-  
-  float rightPitchFactor = calculatePitchFactor(motorRightPWMCurr, cosPitch);
-  motorRightSenseLPNorm = motorRightSenseLP / rightPitchFactor / ROBOT_MASS_FACTOR;
-}
-
-
-bool Motor::detectMotorFaults() {
-  return (checkFault() || checkCurrentTooHighError() || checkMowRpmFault() 
-          || checkOdometryError() || checkCurrentTooLowError());
-}
-
-void Motor::handleMotorRecovery() {
-  // try to recover from a motor driver fault signal by resetting the motor driver fault
-  // if it fails, indicate a motor error to the robot control (so it can try an obstacle avoidance)  
-  if (nextRecoverMotorFaultTime != 0){
-    if (millis() > nextRecoverMotorFaultTime){
-      if (recoverMotorFault){
-        nextRecoverMotorFaultTime = millis() + MOTOR_FAULT_RECOVERY_TIMEOUT_MS;
-        recoverMotorFaultCounter++;                                               
-        CONSOLE.print("motor fault recover counter ");
-        CONSOLE.println(recoverMotorFaultCounter);
-        motorDriver.resetMotorFaults();
-        recoverMotorFault = false;  
-        if (recoverMotorFaultCounter >= MAX_MOTOR_FAULT_RECOVERY_ATTEMPTS){ // too many successive motor faults
-          //stopImmediately();
-          CONSOLE.println("ERROR: motor recovery failed");
-          recoverMotorFaultCounter = 0;
-          motorError = true;
-        }
-      } else {
-        CONSOLE.println("resetting recoverMotorFaultCounter");
-        recoverMotorFaultCounter = 0;
-        nextRecoverMotorFaultTime = 0;
-        motorRecoveryState = false;
-      }        
-    }
-  }
-}
-
-void Motor::handleLinearAngularSpeedTimeout() {
-  if (setLinearAngularSpeedTimeoutActive){
-    if (millis() > setLinearAngularSpeedTimeout){
-      //CONSOLE.println("Motor::run - LinearAngularSpeedTimeout");
-      setLinearAngularSpeedTimeoutActive = false;
-      motorLeftRpmSet = 0;
-      motorRightRpmSet = 0;
-    }
-  }
-}
-
-void Motor::processEncoderTicksAndCalculateRpm() {
-  int ticksLeft;
-  int ticksRight;
-  int ticksMow;
-  motorDriver.getMotorEncoderTicks(ticksLeft, ticksRight, ticksMow);  
-  
-  if (motorLeftPWMCurr < 0) ticksLeft *= -1;
-  if (motorRightPWMCurr < 0) ticksRight *= -1;
-  if (motorMowPWMCurr < 0) ticksMow *= -1;
-  motorLeftTicks += ticksLeft;
-  motorRightTicks += ticksRight;
-  motorMowTicks += ticksMow;
-  //CONSOLE.println(motorMowTicks);
-
-  unsigned long currTime = millis();
-  float deltaControlTimeSec =  ((float)(currTime - lastControlTime)) / 1000.0;
-  lastControlTime = currTime;
-
-  // calculate speed via tick count
-  // 2000 ticksPerRevolution: @ 30 rpm  => 0.5 rps => 1000 ticksPerSec
-  // 20 ticksPerRevolution: @ 30 rpm => 0.5 rps => 10 ticksPerSec
-  motorLeftRpmCurr = 60.0 * ( ((float)ticksLeft) / ((float)ticksPerRevolution) ) / deltaControlTimeSec;
-  motorRightRpmCurr = 60.0 * ( ((float)ticksRight) / ((float)ticksPerRevolution) ) / deltaControlTimeSec;
-  motorMowRpmCurr = 60.0 * ( ((float)ticksMow) / MOW_TICKS_PER_REVOLUTION ) / deltaControlTimeSec;
-  motorLeftRpmCurrLP = RPM_LP_FILTER_COEFF * motorLeftRpmCurrLP + (1.0f - RPM_LP_FILTER_COEFF) * motorLeftRpmCurr;
-  motorRightRpmCurrLP = RPM_LP_FILTER_COEFF * motorRightRpmCurrLP + (1.0f - RPM_LP_FILTER_COEFF) * motorRightRpmCurr;
-  motorMowRpmCurrLP = RPM_LP_FILTER_COEFF * motorMowRpmCurrLP + (1.0f - RPM_LP_FILTER_COEFF) * motorMowRpmCurr;
-  
-  if (ticksLeft == 0) {
-    motorLeftTicksZero++;
-    if (motorLeftTicksZero > ZERO_TICK_THRESHOLD) motorLeftRpmCurr = 0;
-  } else motorLeftTicksZero = 0;
-
-  if (ticksRight == 0) {
-    motorRightTicksZero++;
-    if (motorRightTicksZero > ZERO_TICK_THRESHOLD) motorRightRpmCurr = 0;
-  } else motorRightTicksZero = 0;
+  checkOverload();  
 }
 
 
 void Motor::control(){  
     
-  //########################  Calculate PWM for left and right driving motors ############################
+  //########################  Calculate PWM for left driving motor ############################
 
-  computeMotorPidControl(motorLeftPID, motorLeftLpf, motorLeftRpmCurr, motorLeftRpmSet, motorLeftPWMCurr, "Left");
-  computeMotorPidControl(motorRightPID, motorRightLpf, motorRightRpmCurr, motorRightRpmSet, motorRightPWMCurr, "Right");
-  
-  #ifdef DEBUG_MOTOR_PID
-    CONSOLE.print(", PWM: L="); CONSOLE.print(motorLeftPWMCurr);
-    CONSOLE.print(", R="); CONSOLE.println(motorRightPWMCurr);
-  #endif
+  motorLeftPID.TaMax = 0.1;
+  motorLeftPID.x = motorLeftLpf(motorLeftRpmCurr);  
+  motorLeftPID.w  = motorLeftRpmSet;
+  motorLeftPID.y_min = -pwmMax;
+  motorLeftPID.y_max = pwmMax;
+  motorLeftPID.max_output = pwmMax;
+  motorLeftPID.output_ramp = MOTOR_PID_RAMP;
+  //CONSOLE.print(motorLeftPID.x);
+  //CONSOLE.print(",");
+  //CONSOLE.print(motorLeftPID.w);
+  //CONSOLE.println();
+  motorLeftPID.compute();
+  motorLeftPWMCurr = motorLeftPWMCurr + motorLeftPID.y;
+  if (motorLeftRpmSet >= 0) motorLeftPWMCurr = min( max(0, (int)motorLeftPWMCurr), pwmMax); // 0.. pwmMax
+  if (motorLeftRpmSet < 0) motorLeftPWMCurr = max(-pwmMax, min(0, (int)motorLeftPWMCurr));  // -pwmMax..0
 
-  applyPwmZeroingForLowRpm();
+  //########################  Calculate PWM for right driving motor ############################
   
-  #ifdef DEBUG_MOTOR_PID
-    CONSOLE.print(", PWM: L="); CONSOLE.print(motorLeftPWMCurr);
-    CONSOLE.print(", R="); CONSOLE.println(motorRightPWMCurr);
-  #endif
+  motorRightPID.TaMax = 0.1;
+  motorRightPID.x = motorRightLpf(motorRightRpmCurr);
+  motorRightPID.w = motorRightRpmSet;
+  motorRightPID.y_min = -pwmMax;
+  motorRightPID.y_max = pwmMax;
+  motorRightPID.max_output = pwmMax;
+  motorRightPID.output_ramp = MOTOR_PID_RAMP;
+  motorRightPID.compute();
+  motorRightPWMCurr = motorRightPWMCurr + motorRightPID.y;
+  if (motorRightRpmSet >= 0) motorRightPWMCurr = min( max(0, (int)motorRightPWMCurr), pwmMax);  // 0.. pwmMax
+  if (motorRightRpmSet < 0) motorRightPWMCurr = max(-pwmMax, min(0, (int)motorRightPWMCurr));   // -pwmMax..0  
+
+  if ((abs(motorLeftRpmSet) < 0.01) && (motorLeftPWMCurr < 30)) motorLeftPWMCurr = 0;
+  if ((abs(motorRightRpmSet) < 0.01) && (motorRightPWMCurr < 30)) motorRightPWMCurr = 0;
 
   //########################  Print Motor Parameter to LOG ############################
   
@@ -803,85 +749,4 @@ void Motor::plot(){
   }
   speedPWM(0, 0, 0);
   CONSOLE.println("motor plot done - please ignore any IMU/GPS errors");
-}
-
-void Motor::computeMotorPidControl(PID& motorPID, LowPassFilter& motorLpf, float rpmCurr, float rpmSet, int& pwmCurr, const char* motorName) {
-  // Set PID input and setpoint (parameters already initialized in begin())
-  motorPID.x = motorLpf(rpmCurr);
-  motorPID.w = rpmSet;
-  motorPID.y_min = -pwmMax;
-  motorPID.y_max = pwmMax;
-  
-  #ifdef DEBUG_MOTOR_PID
-    CONSOLE.print(motorName); CONSOLE.print(" PID: x="); CONSOLE.print(motorPID.x);
-    CONSOLE.print(", w="); CONSOLE.print(motorPID.w);
-  #endif
-  
-  motorPID.compute();
-  pwmCurr = pwmCurr + motorPID.y;
-  
-  // Apply PWM limits based on direction
-  if (rpmSet >= 0) {
-    pwmCurr = min(max(0, pwmCurr), pwmMax); // 0.. pwmMax
-  } else {
-    pwmCurr = max(-pwmMax, min(0, pwmCurr));  // -pwmMax..0
-  }
-}
-
-void Motor::logMotorCurrentError(const char* motorName, float currentValue, float thresholdValue, const char* comparison, int pwmValue) {
-  CONSOLE.print(motorName); CONSOLE.print(": ");
-  CONSOLE.print(currentValue); CONSOLE.print("A "); CONSOLE.print(comparison); CONSOLE.print(" ");
-  CONSOLE.print(thresholdValue); CONSOLE.print("A");
-  if (pwmValue != -1) {
-    CONSOLE.print(" (PWM="); CONSOLE.print(pwmValue); CONSOLE.print(")");
-  }
-  CONSOLE.print(" ");
-}
-
-void Motor::logMotorFaultError(const char* motorName, const char* faultType) {
-  CONSOLE.print("Error: motor driver ");
-  CONSOLE.print(motorName);
-  CONSOLE.print(" signaled ");
-  CONSOLE.println(faultType);
-}
-
-void Motor::applyPwmZeroingForLowRpm() {
-  // Zero small PWM values when target RPM is near zero
-  if ((abs(motorLeftRpmSet) < 0.01) && (abs(motorLeftPWMCurr) < 30)) motorLeftPWMCurr = 0;
-  if ((abs(motorRightRpmSet) < 0.01) && (abs(motorRightPWMCurr) < 30)) motorRightPWMCurr = 0;
-}
-
-void Motor::initializePidAndLpfControllers() {
-  // Initialize PID controllers with parameters from config_alfred.h
-  motorLeftPID.Kp = MOTOR_PID_KP;
-  motorLeftPID.Ki = MOTOR_PID_KI;
-  motorLeftPID.Kd = MOTOR_PID_KD;
-  motorLeftPID.TaMax = 0.1;  // Maximum expected sample time
-  motorLeftPID.max_output = MOTOR_PID_LIMIT;
-  motorLeftPID.output_ramp = MOTOR_PID_RAMP;
-  motorLeftPID.reset();
-  
-  // Copy PID parameters to right motor
-  motorRightPID.Kp = motorLeftPID.Kp;
-  motorRightPID.Ki = motorLeftPID.Ki;
-  motorRightPID.Kd = motorLeftPID.Kd;
-  motorRightPID.TaMax = motorLeftPID.TaMax;
-  motorRightPID.max_output = motorLeftPID.max_output;
-  motorRightPID.output_ramp = motorLeftPID.output_ramp;
-  motorRightPID.reset();
-
-  // Initialize low-pass filters from config_alfred.h
-  motorLeftLpf.Tf = MOTOR_PID_LP;
-  motorLeftLpf.reset();
-  motorRightLpf.Tf = MOTOR_PID_LP;
-  motorRightLpf.reset();
-  
-  #ifdef DEBUG_MOTOR
-    CONSOLE.println("Motor::begin() - PID parameters initialized:");
-    CONSOLE.print("  Kp="); CONSOLE.print(motorLeftPID.Kp);
-    CONSOLE.print(", Ki="); CONSOLE.print(motorLeftPID.Ki);
-    CONSOLE.print(", Kd="); CONSOLE.println(motorLeftPID.Kd);
-    CONSOLE.print("  PWM Max="); CONSOLE.print(pwmMax);
-    CONSOLE.print(", Mow PWM Max="); CONSOLE.println(pwmMaxMow);
-  #endif
 }

@@ -72,8 +72,8 @@ void TimeTable::dumpWeekTime(weektime_t time){
     CONSOLE.print(s);
     CONSOLE.print("  hour=");
     CONSOLE.println(time.hour);
-    // CONSOLE.print("  min=");
-    // CONSOLE.println(time.min);
+    //CONSOLE.print("  min=");
+    //CONSOLE.println(time.min);
 }
 
 
@@ -136,10 +136,10 @@ int TimeTable::crc(){
 // set day mask for hour 
 bool TimeTable::setDayMask(int hour, daymask_t mask){
     if ((hour < 0) || (hour > 23)) return false;
-    // CONSOLE.print("setDayMask hour=");
-    // CONSOLE.print(hour);
-    // CONSOLE.print("  mask=");
-    // CONSOLE.println(mask);
+    //CONSOLE.print("setDayMask hour=");
+    //CONSOLE.print(hour);
+    //CONSOLE.print("  mask=");
+    //CONSOLE.println(mask);
     timetable.hours[hour] = mask;
     return true;
 }
@@ -297,8 +297,8 @@ bool TimeTable::shouldAutostopNow(){
 
 // called every 30s in robot
 void TimeTable::run(){    
-    // if (millis() < nextCheckTime) return;
-    // nextCheckTime = millis() + 30000;    
+    //if (millis() < nextCheckTime) return;
+    //nextCheckTime = millis() + 30000;    
 
     // reset triggers on timetable changes
     bool allowed = mowingAllowed(currentTime);

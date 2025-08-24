@@ -742,30 +742,18 @@ boolean PubSubClient::setBufferSize(uint16_t size) {
         // Cannot set it back to 0
         return false;
     }
-    
-    uint8_t* newBuffer = NULL;
-    
     if (this->bufferSize == 0) {
-        // Initial allocation
-        newBuffer = (uint8_t*)malloc(size);
-        if (newBuffer == NULL) {
-            // Allocation failed - log error for debugging
-            return false;
-        }
+        this->buffer = (uint8_t*)malloc(size);
     } else {
-        // Reallocation
-        newBuffer = (uint8_t*)realloc(this->buffer, size);
-        if (newBuffer == NULL) {
-            // Reallocation failed - original buffer remains valid
-            // Log error but don't free original buffer
+        uint8_t* newBuffer = (uint8_t*)realloc(this->buffer, size);
+        if (newBuffer != NULL) {
+            this->buffer = newBuffer;
+        } else {
             return false;
         }
     }
-    
-    // Success - update buffer pointer and size
-    this->buffer = newBuffer;
     this->bufferSize = size;
-    return true;
+    return (this->buffer != NULL);
 }
 
 uint16_t PubSubClient::getBufferSize() {

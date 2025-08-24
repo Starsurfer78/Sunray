@@ -42,3 +42,15 @@ void logResetCause(){
   }
 }
 
+
+// get free memory
+// https://learn.adafruit.com/memories-of-an-arduino/measuring-free-memory
+int freeMemory() {
+#ifdef __linux__
+  return 1000000;
+#else
+  char top;
+  return &top - reinterpret_cast<char*>(sbrk(0));
+#endif
+}
+

@@ -9,13 +9,9 @@
 #define SERIAL_ROBOT_DRIVER_H
 
 #include <Arduino.h>
-#include "../../config.h"
 #include "RobotDriver.h"
 #ifdef __linux__
   #include <Process.h>
-#endif
-#ifdef ENABLE_SIMPLE_WIFI_RESTART
-  #include "SimpleWifiRestart.h"
 #endif
 
 
@@ -35,12 +31,6 @@ class SerialRobotDriver: public RobotDriver {
     float batteryVoltage;
     float chargeVoltage;
     float chargeCurrent;
-    // Battery voltage smoothing variables
-    static const int VOLTAGE_BUFFER_SIZE = 10;
-    float voltageBuffer[VOLTAGE_BUFFER_SIZE];
-    int voltageBufferIndex;
-    int voltageBufferCount;
-    float smoothedBatteryVoltage;
     float mowCurr;
     float motorLeftCurr;
     float motorRightCurr;
@@ -63,8 +53,6 @@ class SerialRobotDriver: public RobotDriver {
     void updatePanelLEDs();
     void updateCpuTemperature();
     void updateWifiConnectionState();
-    void updateBatteryVoltageSmoothing(float newVoltage);
-    float getSmoothedBatteryVoltage();
     bool setLedState(int ledNumber, bool greenState, bool redState);
     bool setFanPowerState(bool state);
     bool setImuPowerState(bool state);
@@ -73,9 +61,6 @@ class SerialRobotDriver: public RobotDriver {
     #ifdef __linux__
       Process cpuTempProcess;
       Process wifiStatusProcess;    
-    #endif
-    #ifdef ENABLE_SIMPLE_WIFI_RESTART
-      SimpleWifiRestart simpleWifiRestart;
     #endif
     String cmd;
     String cmdResponse;
@@ -89,17 +74,6 @@ class SerialRobotDriver: public RobotDriver {
     int cmdSummaryCounter;
     int cmdMotorResponseCounter;
     int cmdSummaryResponseCounter;
-    
-    // Enhanced AT+ protocol variables
-    unsigned long motorTimeout;
-    unsigned long summaryTimeout;
-    int maxRetries;
-    bool enableCrcCheck;
-    unsigned long lastMotorCommandTime;
-    unsigned long lastSummaryCommandTime;
-    int communicationErrors;
-    unsigned long lastErrorTime;
-    uint16_t lastErrorCode;
     void sendRequest(String s);
     void processComm();
     void processResponse(bool checkCrc);

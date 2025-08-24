@@ -153,7 +153,6 @@ bool LinuxCAN::runRx(){
 		}
 		frameCounterRx++;
 	}
-	return true;
 }
 
 bool LinuxCAN::runTx(){

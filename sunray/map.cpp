@@ -8,60 +8,20 @@
 #include "StateEstimator.h"
 #include "events.h"
 #include "helper.h"
-
-// AllocationHelper template implementations
-template<typename T>
-bool AllocationHelper<T>::validateSize(short size, short maxSize, const char* typeName) {
-  if (size < 0 || size > maxSize) {
-    CONSOLE.print("ERROR ");
-    CONSOLE.print(typeName);
-    CONSOLE.println("::alloc invalid number");
-    return false;
-  }
-  return true;
-}
-
-template<typename T>
-void AllocationHelper<T>::reportAllocError(const char* typeName) {
-  CONSOLE.print("ERROR ");
-  CONSOLE.print(typeName);
-  CONSOLE.println("::alloc out of memory");
-}
-
-// Explicit template instantiations for the types we use
-template struct AllocationHelper<Point>;
-template struct AllocationHelper<Polygon>;
-template struct AllocationHelper<Node>;
-#include "src/memory_guard.h"
-#include "src/stack_allocator.h"
-#include "src/memory_monitor.h"
 #include <Arduino.h>
-#include <cfloat>
 
 
 #ifndef _SAM3XA_                 // not Arduino Due
   #define FLOAT_CALC    1    // comment out line for using integer calculations instead of float  
 #endif
 
-// Legacy memory corruption checking - migrating to MemoryGuard system
 // we check for memory corruptions by storing one additional item in all dynamic arrays and 
 // checking the value of the item during free operation
-// Memory management constants
 #define CHECK_CORRUPT   1
-#define CHECK_ID        MemoryGuard::GUARD_MAGIC_ID
+#define CHECK_ID        0x4A4A
 
-// File format markers
-#define POLYGON_MARKER     0xBB
-#define POLYGON_LIST_MARKER 0xCC
+Point *CHECK_POINT = (Point*)0x12345678;  // just some arbitray address for corruption check
 
-// Allocation limits
-#define MAX_POLYGON_POINTS    10000
-#define MAX_POLYGON_LIST_SIZE  5000
-#define MAX_NODE_LIST_SIZE    20000
-
-Point *CHECK_POINT = (Point*)MemoryGuard::GUARD_MAGIC_PTR;  // using MemoryGuard magic pointer
-
-// Legacy counters - will be replaced by MemoryGuard in future versions
 unsigned long memoryCorruptions = 0;        
 unsigned long memoryAllocErrors = 0;
 
@@ -144,7 +104,6 @@ Polygon::Polygon(short aNumPoints){
 void Polygon::init(){  
   numPoints = 0;  
   points = NULL;
-  stackAllocated = false;
 }
 
 Polygon::~Polygon(){
@@ -153,44 +112,22 @@ Polygon::~Polygon(){
 
 bool Polygon::alloc(short aNumPoints){
   if (aNumPoints == numPoints) return true;
-  if (!AllocationHelper<Point>::validateSize(aNumPoints, MAX_POLYGON_POINTS, "Polygon")) {
+  if ((aNumPoints < 0) || (aNumPoints > 10000)) {
+    CONSOLE.println("ERROR Polygon::alloc invalid number");    
     return false;
   }
-  
-  // Try stack-based allocation for small arrays first
-  bool usedStack = false;
-  Point* newPoints = StackAllocator::allocatePoints(aNumPoints+CHECK_CORRUPT, usedStack);
+  Point* newPoints = new Point[aNumPoints+CHECK_CORRUPT];    
   if (newPoints == NULL) {
-    AllocationHelper<Point>::reportAllocError("Polygon");
-    GUARD_RECORD_ALLOC_ERROR();
+    CONSOLE.println("ERROR Polygon::alloc out of memory");
+    memoryAllocErrors++;
     return false;
   }
-  
   if (points != NULL){
-    // Optimize: only copy if we have data to preserve
-    short copyCount = min(numPoints, aNumPoints);
-    if (copyCount > 0) {
-      // For small arrays, element-wise copy can be faster due to better cache locality
-      if (copyCount <= 8) {
-        for (short i = 0; i < copyCount; i++) {
-          newPoints[i] = points[i];
-        }
-      } else {
-        memcpy(newPoints, points, sizeof(Point) * copyCount);
-      }
-    }
-    GUARD_CHECK_INT(points[numPoints].px);
-    GUARD_CHECK_INT(points[numPoints].py);
-    
-    // Properly deallocate old points
-    StackAllocator::deallocatePoints(points, stackAllocated);
-    if (stackAllocated) {
-      StackAllocator::releaseBuffer(points);
-    }
-  }
-  
-  // Store allocation method for proper deallocation
-  stackAllocated = usedStack; 
+    memcpy(newPoints, points, sizeof(Point)* min(numPoints,aNumPoints) );        
+    if (points[numPoints].px != CHECK_ID) memoryCorruptions++;
+    if (points[numPoints].py != CHECK_ID) memoryCorruptions++;
+    delete[] points;    
+  } 
   points = newPoints;              
   numPoints = aNumPoints;
   points[numPoints].px=CHECK_ID;
@@ -200,18 +137,11 @@ bool Polygon::alloc(short aNumPoints){
 
 void Polygon::dealloc(){
   if (points == NULL) return;  
-  GUARD_CHECK_INT(points[numPoints].px);
-  GUARD_CHECK_INT(points[numPoints].py);
-  
-  // Use StackAllocator for proper deallocation
-  StackAllocator::deallocatePoints(points, stackAllocated);
-  if (stackAllocated) {
-    StackAllocator::releaseBuffer(points);
-  }
-  
+  if (points[numPoints].px != CHECK_ID) memoryCorruptions++;
+  if (points[numPoints].py != CHECK_ID) memoryCorruptions++;
+  delete[] points;  
   points = NULL;
-  numPoints = 0;
-  stackAllocated = false;
+  numPoints = 0;  
 }
 
 void Polygon::dump(){
@@ -236,13 +166,14 @@ long Polygon::crc(){
 
 bool Polygon::read(File &file){
   byte marker = file.read();
-  if (marker != POLYGON_MARKER){
+  if (marker != 0xBB){
     CONSOLE.println("ERROR reading polygon: invalid marker");
     return false;
   }
   short num = 0;
   file.read((uint8_t*)&num, sizeof(num));
-
+  //CONSOLE.print("reading points:");
+  //CONSOLE.println(num);
   if (!alloc(num)) return false;
   for (short i=0; i < num; i++){    
     if (!points[i].read(file)) return false;
@@ -251,12 +182,13 @@ bool Polygon::read(File &file){
 }
 
 bool Polygon::write(File &file){
-  if (file.write(POLYGON_MARKER) == 0) return false;  
+  if (file.write(0xBB) == 0) return false;  
   if (file.write((uint8_t*)&numPoints, sizeof(numPoints)) == 0) {
     CONSOLE.println("ERROR writing polygon");
     return false; 
   }
-
+  //CONSOLE.print("writing points:");
+  //CONSOLE.println(numPoints);
   for (int i=0; i < numPoints; i++){    
     if (!points[i].write(file)) return false;
   }
@@ -299,44 +231,26 @@ PolygonList::~PolygonList(){
 
 bool PolygonList::alloc(short aNumPolygons){  
   if (aNumPolygons == numPolygons) return true;
-  if (!AllocationHelper<Polygon>::validateSize(aNumPolygons, MAX_POLYGON_LIST_SIZE, "PolygonList")) {
+  if ((aNumPolygons < 0) || (aNumPolygons > 5000)) {
+    CONSOLE.println("ERROR PolygonList::alloc invalid number");    
     return false;
   }
-  
-  // Use consistent allocation strategy with other classes
   Polygon* newPolygons = new Polygon[aNumPolygons+CHECK_CORRUPT];  
   if (newPolygons == NULL){
-    AllocationHelper<Polygon>::reportAllocError("PolygonList");
-    GUARD_RECORD_ALLOC_ERROR();
+    CONSOLE.println("ERROR PolygonList::alloc out of memory");
+    memoryAllocErrors++;
     return false;
   }
-  
   if (polygons != NULL){
-    // Optimize: only copy if we have data to preserve
-    short copyCount = min(numPolygons, aNumPolygons);
-    if (copyCount > 0) {
-      // For small arrays, element-wise copy can be faster due to better cache locality
-      if (copyCount <= 4) {
-        for (short i = 0; i < copyCount; i++) {
-          newPolygons[i] = polygons[i];
-        }
-      } else {
-        memcpy(newPolygons, polygons, sizeof(Polygon) * copyCount);
-      }
-    }        
-    
-    // Properly deallocate polygons that won't fit in new array
+    memcpy(newPolygons, polygons, sizeof(Polygon)* min(numPolygons, aNumPolygons));        
     if (aNumPolygons < numPolygons){
       for (int i=aNumPolygons; i < numPolygons; i++){
-        polygons[i].dealloc();        
+        //polygons[i].dealloc();        
       }  
     }
-    
-    // Check memory corruption before deallocation
-    GUARD_CHECK_PTR(polygons[numPolygons].points);
+    if (polygons[numPolygons].points != CHECK_POINT) memoryCorruptions++;
     delete[] polygons;    
   } 
-  
   polygons = newPolygons;              
   numPolygons = aNumPolygons;  
   polygons[numPolygons].points = CHECK_POINT;
@@ -348,7 +262,7 @@ void PolygonList::dealloc(){
   for (int i=0; i < numPolygons; i++){
     polygons[i].dealloc();        
   }  
-  GUARD_CHECK_PTR(polygons[numPolygons].points);
+  if (polygons[numPolygons].points != CHECK_POINT) memoryCorruptions++;
   delete[] polygons;
   polygons = NULL;
   numPolygons = 0;  
@@ -381,13 +295,14 @@ long PolygonList::crc(){
 
 bool PolygonList::read(File &file){
   byte marker = file.read();
-  if (marker != POLYGON_LIST_MARKER){
+  if (marker != 0xCC){
     CONSOLE.println("ERROR reading polygon list: invalid marker");
     return false;
   }
   short num = 0;
   file.read((uint8_t*)&num, sizeof(num)); 
-
+  //CONSOLE.print("reading polygon list:");
+  //CONSOLE.println(num);
   if (!alloc(num)) return false;
   for (short i=0; i < num; i++){    
     if (!polygons[i].read(file)) return false;
@@ -396,7 +311,7 @@ bool PolygonList::read(File &file){
 }
 
 bool PolygonList::write(File &file){
-  if (file.write(POLYGON_LIST_MARKER) == 0) {
+  if (file.write(0xCC) == 0) {
     CONSOLE.println("ERROR writing polygon list marker");
     return false;  
   } 
@@ -404,7 +319,8 @@ bool PolygonList::write(File &file){
     CONSOLE.println("ERROR writing polygon list");
     return false; 
   }
-
+  //CONSOLE.print("writing polygon list:");
+  //CONSOLE.println(numPolygons);
   for (int i=0; i < numPolygons; i++){    
     if (!polygons[i].write(file)) return false;
   }
@@ -453,8 +369,7 @@ NodeList::NodeList(short aNumNodes){
 
 void NodeList::init(){
   numNodes = 0;
-  nodes = NULL;
-  stackAllocated = false;
+  nodes = NULL;  
 }
 
 NodeList::~NodeList(){
@@ -463,51 +378,26 @@ NodeList::~NodeList(){
 
 bool NodeList::alloc(short aNumNodes){  
   if (aNumNodes == numNodes) return true;
-  if (!AllocationHelper<Node>::validateSize(aNumNodes, MAX_NODE_LIST_SIZE, "NodeList")) {
+  if ((aNumNodes < 0) || (aNumNodes > 20000)) {
+    CONSOLE.println("ERROR NodeList::alloc invalid number");    
     return false;
   }
-  
-  // Try stack-based allocation for small arrays first
-  bool usedStack = false;
-  // Use regular malloc for Node allocation since StackAllocator only handles Points
-  Node* newNodes = (Node*)malloc((aNumNodes+CHECK_CORRUPT) * sizeof(Node));
-  usedStack = false;
-  if (newNodes == NULL) {
-    AllocationHelper<Node>::reportAllocError("NodeList");
-    GUARD_RECORD_ALLOC_ERROR();
+  Node* newNodes = new Node[aNumNodes+CHECK_CORRUPT];  
+  if (newNodes == NULL){
+    CONSOLE.println("ERROR NodeList::alloc");
+    memoryAllocErrors++;
     return false;
   }
-  
   if (nodes != NULL){
-    // Optimize: only copy if we have data to preserve
-    short copyCount = min(numNodes, aNumNodes);
-    if (copyCount > 0) {
-      // For small arrays, element-wise copy can be faster due to better cache locality
-      if (copyCount <= 6) {
-        for (short i = 0; i < copyCount; i++) {
-          newNodes[i] = nodes[i];
-        }
-      } else {
-        memcpy(newNodes, nodes, sizeof(Node) * copyCount);
-      }
-    }        
+    memcpy(newNodes, nodes, sizeof(Node)* min(numNodes, aNumNodes));        
     if (aNumNodes < numNodes){
       for (int i=aNumNodes; i < numNodes; i++){
         //nodes[i].dealloc();        
       }  
     }
-    GUARD_CHECK_PTR(nodes[numNodes].point);
-    
-    // Properly deallocate old nodes
-     if (stackAllocated) {
-       // This should not happen with current implementation
-     } else {
-       free(nodes);
-     }
+    if (nodes[numNodes].point != CHECK_POINT) memoryCorruptions++;
+    delete[] nodes;    
   } 
-  
-  // Store allocation method for proper deallocation
-  stackAllocated = usedStack;
   nodes = newNodes;              
   numNodes = aNumNodes;  
   nodes[numNodes].point=CHECK_POINT;
@@ -519,18 +409,10 @@ void NodeList::dealloc(){
   for (int i=0; i < numNodes; i++){
     nodes[i].dealloc();        
   }  
-  GUARD_CHECK_PTR(nodes[numNodes].point);
-  
-  // Use StackAllocator for proper deallocation
-  if (stackAllocated) {
-    // This should not happen with current implementation
-  } else {
-    free(nodes);
-  }
-  
+  if (nodes[numNodes].point != CHECK_POINT) memoryCorruptions++;
+  delete[] nodes;
   nodes = NULL;
-  numNodes = 0;
-  stackAllocated = false;
+  numNodes = 0;  
 }
 
 
@@ -607,15 +489,7 @@ void Map::begin(){
   dockPointsIdx = 0;
   shouldDock = false; 
   shouldRetryDock = false; 
-  shouldMow = false;
-  dockRetryCount = 0;
-  lastRetryTime = 0;
-  
-  // Initialize obstacle detection variables
-  lastObstaclePos.setXY(0, 0);
-  lastObstacleTime = 0;
-  obstacleMarkedPermanent = false;
-  obstacleDetectionCount = 0;         
+  shouldMow = false;         
   mapCRC = 0;  
   CONSOLE.print("sizeof Point=");
   CONSOLE.println(sizeof(Point));  
@@ -627,7 +501,8 @@ void Map::begin(){
 
 long Map::calcMapCRC(){   
   long crc = perimeterPoints.crc() + exclusions.crc() + dockPoints.crc() + mowPoints.crc();       
-  
+  //CONSOLE.print("computed map crc=");  
+  //CONSOLE.println(crc);  
   return crc;
 }
 
@@ -649,26 +524,37 @@ void Map::dump(){
   //dockPoints.dump();
   CONSOLE.print("mow pts: ");  
   CONSOLE.println(mowPoints.numPoints);  
-  // Map dump information (debug output removed for performance)
-  // First mow point, free points count, and indices available internally
+  //mowPoints.dump();
+  if (mowPoints.numPoints > 0){
+    CONSOLE.print("first mow point:");
+    CONSOLE.print(mowPoints.points[0].x());
+    CONSOLE.print(",");
+    CONSOLE.println(mowPoints.points[0].y());
+  }
+  CONSOLE.print("free pts: ");
+  CONSOLE.println(freePoints.numPoints);  
+  CONSOLE.print("mowPointsIdx=");
+  CONSOLE.print(mowPointsIdx);
+  CONSOLE.print(" dockPointsIdx=");
+  CONSOLE.print(dockPointsIdx);
+  CONSOLE.print(" freePointsIdx=");
+  CONSOLE.print(freePointsIdx);
+  CONSOLE.print(" wayMode=");
+  CONSOLE.println(wayMode);
   checkMemoryErrors();
 }
 
 
 void Map::checkMemoryErrors(){
-  // Use new MemoryGuard system for better error reporting
-  MemoryGuard::checkAndReport();
-  
-  // Legacy error checking for backward compatibility
   if (memoryCorruptions != 0){
-    CONSOLE.print("********************* ERROR: legacy memoryCorruptions=");
+    CONSOLE.print("********************* ERROR: memoryCorruptions=");
     CONSOLE.println(memoryCorruptions);
-    CONSOLE.println(" *********************");
+    CONSOLE.print(" *********************");
   } 
   if (memoryAllocErrors != 0){
-    CONSOLE.print("********************* ERROR: legacy memoryAllocErrors=");
+    CONSOLE.print("********************* ERROR: memoryAllocErrors=");
     CONSOLE.println(memoryAllocErrors);
-    CONSOLE.println(" *********************");
+    CONSOLE.print(" *********************");
   } 
 }
 
@@ -802,7 +688,7 @@ bool Map::setPoint(int idx, float x, float y){
     clearMap();
   }    
   if (idx % 100 == 0){
-    if (MemoryMonitor::getFreeMemory() < 20000){
+    if (freeMemory () < 20000){
       CONSOLE.println("OUT OF MEMORY");
       return false;
     }
@@ -900,7 +786,10 @@ bool Map::setExclusionLength(int idx, int len){
     finishedUploadingMap();
   }
   
-   
+  //CONSOLE.print("exclusion ");
+  //CONSOLE.print(idx);
+  //CONSOLE.print(": ");
+  //CONSOLE.println(exclusionLength[idx]);   
   return true;
 }
 
@@ -1006,7 +895,7 @@ bool Map::nextPointIsStraight(){
   angleNext = scalePIangles(angleNext, angleCurr);                    
   float diffDelta = distancePI(angleCurr, angleNext);                 
   //CONSOLE.println(fabs(diffDelta)/PI*180.0);
-  return ((fabs(diffDelta)/PI*180.0) < 12); // reduced from 20° to 12° for more precise curve driving
+  return ((fabs(diffDelta)/PI*180.0) < 20);
 }
 
 
@@ -1089,35 +978,8 @@ bool Map::retryDocking(float stateX, float stateY){
   if (shouldRetryDock) {
     CONSOLE.println("ERROR retryDocking: already retrying!");   
     return false;
-  }
-  
-  unsigned long currentTime = millis();
-  
-  // Check if retry is allowed based on timing
-  if (!shouldAllowRetry(currentTime)) {
-    CONSOLE.println("retryDocking: retry too soon, waiting...");
-    return false;
-  }
-  
-  // Increment retry count and update timestamp
-  dockRetryCount++;
-  lastRetryTime = currentTime;
-  
-  // Calculate how many steps to go back based on retry count
-  int stepsBack = calculateRetrySteps(dockRetryCount);
-  
-  // Move back the calculated number of steps
-  for (int i = 0; i < stepsBack && dockPointsIdx > 0; i++) {
-    dockPointsIdx--;
-  }
-  
-  CONSOLE.print("retryDocking: attempt ");
-  CONSOLE.print(dockRetryCount);
-  CONSOLE.print(", moved back ");
-  CONSOLE.print(stepsBack);
-  CONSOLE.print(" steps to index ");
-  CONSOLE.println(dockPointsIdx);
-  
+  } 
+  if (dockPointsIdx > 0) dockPointsIdx--;    
   shouldRetryDock = true;
   trackReverse = (DOCK_FRONT_SIDE) || ((!DOCK_FRONT_SIDE) && (dockPointsIdx < dockPoints.numPoints-3));
   return true;
@@ -1125,20 +987,17 @@ bool Map::retryDocking(float stateX, float stateY){
 
 
 bool Map::startDocking(float stateX, float stateY){  
-  // Starting docking sequence
+  CONSOLE.println("Map::startDocking");
   if ((memoryCorruptions != 0) || (memoryAllocErrors != 0)){
     CONSOLE.println("ERROR startDocking: memory errors");
     return false; 
   }  
   shouldDock = true;
   shouldRetryDock = false;
-  shouldMow = false;
-  
-  // Initialize retry state for new docking attempt
-  resetDockingRetryState();    
+  shouldMow = false;    
   if (dockPoints.numPoints > 0){
     if (wayMode == WAY_DOCK) {
-      // Already in docking mode, skip path planning
+      CONSOLE.println("skipping path planning to first docking point: already docking");    
       return true;
     }
     // find valid path from robot to first docking point      
@@ -1149,28 +1008,27 @@ bool Map::startDocking(float stateX, float stateY){
     dst.assign(dockPoints.points[0]);        
     //findPathFinderSafeStartPoint(src, dst);      
     wayMode = WAY_FREE;              
-    if (findPathWithAlternatives(src, dst)){      
+    if (findPath(src, dst)){      
       return true;
     } else {
-      // No valid path found to docking point (tried alternatives)
-      CONSOLE.println("startDocking: all pathfinding attempts failed");
+      CONSOLE.println("ERROR: no path");
       return false;
     }
   } else {
-    // No docking points available
+    CONSOLE.println("ERROR: no points");
     Logger.event(EVT_ERROR_NO_MAP_POINTS);
     return false; 
   }
 }
 
 bool Map::startMowing(float stateX, float stateY){  
-  // Starting mowing sequence
+  CONSOLE.println("Map::startMowing");
   //stressTest();
   //testIntegerCalcs();
   //return false;
   // ------
   if ((memoryCorruptions != 0) || (memoryAllocErrors != 0)){
-    // Memory errors detected, cannot start mowing
+    CONSOLE.println("ERROR startMowing: memory errors");
     return false; 
   }  
   shouldDock = false;
@@ -1295,7 +1153,7 @@ bool Map::findObstacleSafeMowPoint(Point &findPathToPoint){
       float minDist = 9999;      
       for (int idx=0; idx < obstacles.numPolygons; idx++){
         if (linePolygonIntersectPoint( dst, src, obstacles.polygons[idx], sect)) {  // find shortest section point to dst    
-          float dist = calculateDistance(sect, dst);
+          float dist = distance(sect, dst);
           if (dist < minDist ){
             minDist = dist;
             minSect.assign(sect); 
@@ -1342,116 +1200,6 @@ bool Map::checkpoint(float x, float y){
   }  
 
   return true;
-}
-
-// Helper function to calculate minimum distance from point to polygon edge
-float Map::distanceToPolygonEdge(float x, float y, Polygon &polygon) {
-  float minDistance = FLT_MAX;
-  
-  for (int i = 0; i < polygon.numPoints; i++) {
-    int nextIdx = (i + 1) % polygon.numPoints;
-    Point lineStart = polygon.points[i];
-    Point lineEnd = polygon.points[nextIdx];
-    
-    // Calculate distance from point to line segment
-    float A = x - lineStart.x();
-    float B = y - lineStart.y();
-    float C = lineEnd.x() - lineStart.x();
-    float D = lineEnd.y() - lineStart.y();
-    
-    float dot = A * C + B * D;
-    float lenSq = C * C + D * D;
-    
-    if (lenSq == 0) {
-      // Line segment is actually a point
-      float distance = sqrt(A * A + B * B);
-      minDistance = min(minDistance, distance);
-      continue;
-    }
-    
-    float param = dot / lenSq;
-    float xx, yy;
-    
-    if (param < 0) {
-      xx = lineStart.x();
-      yy = lineStart.y();
-    } else if (param > 1) {
-      xx = lineEnd.x();
-      yy = lineEnd.y();
-    } else {
-      xx = lineStart.x() + param * C;
-      yy = lineStart.y() + param * D;
-    }
-    
-    float dx = x - xx;
-    float dy = y - yy;
-    float distance = sqrt(dx * dx + dy * dy);
-    minDistance = min(minDistance, distance);
-  }
-  
-  return minDistance;
-}
-
-// Enhanced pathfinder with safety offsets
-bool Map::isPointSafeForRobot(float x, float y) {
-  #ifdef ROBOT_WIDTH  // Use new meter-based configuration if available
-    float robotRadius = max(ROBOT_WIDTH, ROBOT_LENGTH) / 2.0; // Use actual robot dimensions
-    float safetyOffset = PERIMETER_SAFETY_OFFSET;
-    
-    // Check perimeter with safety offset
-    Point testPoint;
-    testPoint.setXY(x, y);
-    
-    // Simple distance check to perimeter (basic implementation)
-    // For now, use existing checkpoint and add buffer logic
-    if (!checkpoint(x, y)) {
-      return false; // Point is already outside safe area
-    }
-    
-    // Check if point is too close to perimeter edges
-    // This is a simplified implementation - in production, proper distance calculation would be needed
-    float checkRadius = robotRadius + safetyOffset;
-    for (float angle = 0; angle < 2 * PI; angle += PI/8) {
-      float checkX = x + checkRadius * cos(angle);
-      float checkY = y + checkRadius * sin(angle);
-      if (!checkpoint(checkX, checkY)) {
-        return false; // Robot would collide at this position
-      }
-    }
-    
-    // Check exclusion zones with safety offset
-    testPoint.setXY(x, y);
-    float exclusionCheckRadius = robotRadius + EXCLUSION_SAFETY_OFFSET;
-    for (int i = 0; i < maps.exclusions.numPolygons; i++) {
-      for (float angle = 0; angle < 2 * PI; angle += PI/4) {
-        float checkX = x + exclusionCheckRadius * cos(angle);
-        float checkY = y + exclusionCheckRadius * sin(angle);
-        Point checkPoint;
-        checkPoint.setXY(checkX, checkY);
-        if (maps.pointIsInsidePolygon(maps.exclusions.polygons[i], checkPoint)) {
-          return false; // Robot would enter exclusion zone
-        }
-      }
-    }
-    
-    // Check obstacles with safety offset
-    float obstacleCheckRadius = robotRadius + OBSTACLE_SAFETY_OFFSET;
-    for (int i = 0; i < obstacles.numPolygons; i++) {
-      for (float angle = 0; angle < 2 * PI; angle += PI/4) {
-        float checkX = x + obstacleCheckRadius * cos(angle);
-        float checkY = y + obstacleCheckRadius * sin(angle);
-        Point checkPoint;
-        checkPoint.setXY(checkX, checkY);
-        if (maps.pointIsInsidePolygon(obstacles.polygons[i], checkPoint)) {
-          return false; // Robot would collide with obstacle
-        }
-      }
-    }
-    
-    return true;
-  #else
-    return checkpoint(x, y); // Original behavior
-  #endif
 }
 
 // find start point for path finder on line from src to dst
@@ -1668,7 +1416,7 @@ void Map::setLastTargetPoint(float stateX, float stateY){
 // ------------------------------------------------------ 
 
 
-float Map::calculateDistance(Point &src, Point &dst) {
+float Map::distance(Point &src, Point &dst) {
   return sqrt(sq(src.x()-dst.x())+sq(src.y()-dst.y()));  
 }
 
@@ -1692,11 +1440,11 @@ bool Map::isPointInBoundingBox(Point &pt, Point &A, Point &B){
 // https://www.geeksforgeeks.org/program-for-point-of-intersection-of-two-lines/
 bool Map::lineLineIntersection(Point &A, Point &B, Point &C, Point &D, Point &pt)  { 
   //console.log('lineLineIntersection', A,B,C,D);
-  if ((calculateDistance(A, C) < 0.02) || (calculateDistance(A, D) < 0.02)) { 
+  if ((distance(A, C) < 0.02) || (distance(A, D) < 0.02)) { 
     pt.assign(A);   
     return true;
   } 
-  if ((calculateDistance(B, C) < 0.02) || (calculateDistance(B, D) < 0.02)){
+  if ((distance(B, C) < 0.02) || (distance(B, D) < 0.02)){
     pt.assign(B);
     return true;
   }   
@@ -1763,7 +1511,7 @@ bool Map::linePolygonIntersectPoint( Point &src, Point &dst, Polygon &poly, Poin
         //CONSOLE.print(cp.x());
         //CONSOLE.print(",");
         //CONSOLE.print(cp.y());
-        float dist = calculateDistance(src, cp);
+        float dist = distance(src, cp);
         //CONSOLE.print("  dist=");
         //CONSOLE.println(dist);
         if (dist < minDist){
@@ -1964,9 +1712,8 @@ bool Map::polygonOffset(Polygon &srcPoly, Polygon &dstPoly, float dist){
 
       
 float Map::calcHeuristic(Point &pos0, Point &pos1) {
-  // Use Euclidean distance for better A* performance (admissible and consistent heuristic)
-  return calculateDistance(pos0, pos1);
-  //return distanceManhattan(pos0, pos1);  // Manhattan distance (less optimal for A*)
+  return distanceManhattan(pos0, pos1);
+  //return distance(pos0, pos1) ;  
 }
   
 
@@ -1977,14 +1724,37 @@ float Map::calcHeuristic(Point &pos0, Point &pos1) {
 // 3. otherwise: line between start node and next node node must not intersect any obstacle  
   
 int Map::findNextNeighbor(NodeList &nodes, PolygonList &obstacles, Node &node, int startIdx) {
+  Point dbgSrcPt(4.2, 6.2);
+  Point dbgDstPt(3.6, 6.8);  
+  float dbgSrcDist = distance(*node.point, dbgSrcPt);
+  bool verbose = false; 
+  if (dbgSrcDist < 0.2){
+    verbose = true;
+  }
+  //CONSOLE.print("start=");
+  //CONSOLE.print((*node.point).x());
+  //CONSOLE.print(",");
+  //CONSOLE.println((*node.point).y());   
   for (int idx = startIdx+1; idx < nodes.numNodes; idx++){
     if (nodes.nodes[idx].opened) continue;
     if (nodes.nodes[idx].closed) continue;                
     if (nodes.nodes[idx].point == node.point) continue;     
     Point *pt = nodes.nodes[idx].point;            
     
+    if (verbose){
+      float dbgDstDist = distance(*pt, dbgDstPt);
+      if (dbgDstDist < 0.2){
+        CONSOLE.println("findNextNeighbor trigger debug");        
+      } else verbose = false;
+    }
+    //if (pt.visited) continue;
+    //if (this.distance(pt, node.pos) > 10) continue;
     bool safe = true;            
-    Point sectPt;  
+    Point sectPt;
+    //CONSOLE.print("----check new path with all polygons---dest=");
+    //CONSOLE.print((*pt).x());
+    //CONSOLE.print(",");
+    //CONSOLE.println((*pt).y());  
   
     // check new path with all obstacle polygons (perimeter, exclusions, obstacles)     
     for (int idx3 = 0; idx3 < obstacles.numPolygons; idx3++){             
@@ -1992,12 +1762,21 @@ int Map::findNextNeighbor(NodeList &nodes, PolygonList &obstacles, Node &node, i
        if (isPeri){ // we check with the perimeter?         
          //CONSOLE.println("we check with perimeter");
          bool insidePeri = pointIsInsidePolygon(obstacles.polygons[idx3], *node.point);
+         if (verbose){
+           CONSOLE.print("insidePeri ");
+           CONSOLE.println(insidePeri);
+         }
          if (!insidePeri) { // start point outside perimeter?                                                                                      
              //CONSOLE.println("start point oustide perimeter");
              if (linePolygonIntersectPoint( *node.point, *pt, obstacles.polygons[idx3], sectPt)){               
-               float dist = calculateDistance(*node.point, sectPt);
+               float dist = distance(*node.point, sectPt);          
+               if (verbose){
+                  CONSOLE.print("dist ");
+                  CONSOLE.println(dist);
+               }
                if (dist > ALLOW_ROUTE_OUTSIDE_PERI_METER){ safe = false; break; } // entering perimeter with long distance is not safe                             
                if (linePolygonIntersectionCount( *node.point, *pt, obstacles.polygons[idx3]) != 1){ 
+                 if (verbose) CONSOLE.println("not safe");
                  safe = false; break; 
                }
                continue;           
@@ -2006,10 +1785,17 @@ int Map::findNextNeighbor(NodeList &nodes, PolygonList &obstacles, Node &node, i
        } else {
          //CONSOLE.println("we check with exclusion");
          bool insideObstacle = pointIsInsidePolygon(obstacles.polygons[idx3], *node.point);
-         if (insideObstacle) { // start point inside obstacle?          
+         if (insideObstacle) { // start point inside obstacle?                                                                         
+             if (verbose) CONSOLE.println("inside exclusion");         
+             //CONSOLE.println("start point inside exclusion");          
              if (linePolygonIntersectPoint( *node.point, *pt, obstacles.polygons[idx3], sectPt)){               
-               float dist = calculateDistance(*node.point, sectPt);
+               float dist = distance(*node.point, sectPt);          
+               if (verbose){
+                 CONSOLE.print("dist ");
+                 CONSOLE.println(dist);
+               }
                if (dist > ALLOW_ROUTE_OUTSIDE_PERI_METER){ 
+                 if (verbose) CONSOLE.println("not safe");
                  safe = false; break; 
                } // exiting obstacle with long distance is not safe                             
                continue;           
@@ -2017,11 +1803,17 @@ int Map::findNextNeighbor(NodeList &nodes, PolygonList &obstacles, Node &node, i
          }
        }        
        if (linePolygonIntersection (*node.point, *pt, obstacles.polygons[idx3])){
+         if (verbose) CONSOLE.println("inside intersection");
          safe = false;
          break;
        }             
     }
-    // Path safety check completed
+    //CONSOLE.print("----check done---safe=");
+    //CONSOLE.println(safe);
+    if (verbose){
+      CONSOLE.print("safe ");
+      CONSOLE.println(safe);
+    }
     if (safe) {          
       //pt.visited = true;
       //var anode = {pos: pt, parent: node, f:0, g:0, h:0};          
@@ -2041,6 +1833,7 @@ bool Map::findPath(Point &src, Point &dst){
     return false; 
   }  
   
+  unsigned long nextProgressTime = 0;
   unsigned long startTime = millis();
   CONSOLE.print("findPath (");
   CONSOLE.print(src.x());
@@ -2059,18 +1852,227 @@ bool Map::findPath(Point &src, Point &dst){
     #endif
     CONSOLE.println();
     
-    // Initialize pathfinding data structures
-    if (!initializePathfinding(src, dst)) {
+    // create path-finder obstacles    
+    int idx = 0;
+    if (!pathFinderObstacles.alloc(1 + exclusions.numPolygons + obstacles.numPolygons)) return false;
+    
+    if (freeMemory () < 5000){
+      CONSOLE.println("OUT OF MEMORY");
       return false;
     }
+
+    // For validating a potential route, we will use  'linePolygonIntersectPoint' and check for intersections between route start point 
+    // and end point. To have something to check intersection with, we offset the perimeter (make bigger) and exclusions
+    //  (maker schmaller) and use them as 'obstacles'.
     
-    // Run A* pathfinding algorithm
-    Node* resultNode = processPathfindingNodes(src, dst, startTime);
+    if (!polygonOffset(perimeterPoints, pathFinderObstacles.polygons[idx], 0.04)) return false;
+    idx++;
     
-    // Reconstruct path from result
-    if (!reconstructPath(resultNode, dst)) {
-      return false;
+    for (int i=0; i < exclusions.numPolygons; i++){
+      if (!polygonOffset(exclusions.polygons[i], pathFinderObstacles.polygons[idx], -0.04)) return false;
+      idx++;
+    }      
+    for (int i=0; i < obstacles.numPolygons; i++){
+      if (!polygonOffset(obstacles.polygons[i], pathFinderObstacles.polygons[idx], -0.04)) return false;
+      idx++;
+    }  
+    
+    //CONSOLE.println("perimeter");
+    //perimeterPoints.dump();
+    //CONSOLE.println("exclusions");
+    //exclusions.dump();
+    //CONSOLE.println("obstacles");
+    //obstacles.dump();
+    //CONSOLE.println("pathFinderObstacles");
+    //pathFinderObstacles.dump();
+    
+    // create nodes
+    int allocNodeCount = exclusions.numPoints() + obstacles.numPoints() + perimeterPoints.numPoints + 2;
+    CONSOLE.print ("freem=");
+    CONSOLE.print(freeMemory ());    
+    CONSOLE.print("  allocating nodes ");
+    CONSOLE.print(allocNodeCount);
+    CONSOLE.print(" (");
+    CONSOLE.print(sizeof(Node) * allocNodeCount);
+    CONSOLE.println(" bytes)");
+
+    if (!pathFinderNodes.alloc(allocNodeCount)) return false;
+    for (int i=0; i < pathFinderNodes.numNodes; i++){
+      pathFinderNodes.nodes[i].init();
     }
+    // exclusion nodes
+    idx = 0;
+    for (int i=0; i < exclusions.numPolygons; i++){
+      for (int j=0; j < exclusions.polygons[i].numPoints; j++){    
+        pathFinderNodes.nodes[idx].point = &exclusions.polygons[i].points[j];
+        idx++;
+      }
+    }
+    // obstacle nodes    
+    for (int i=0; i < obstacles.numPolygons; i++){
+      for (int j=0; j < obstacles.polygons[i].numPoints; j++){    
+        pathFinderNodes.nodes[idx].point = &obstacles.polygons[i].points[j];
+        idx++;
+      }
+    }
+    // perimeter nodes
+    for (int j=0; j < perimeterPoints.numPoints; j++){    
+      pathFinderNodes.nodes[idx].point = &perimeterPoints.points[j];
+      idx++;
+    }      
+    // start node
+    Node *start = &pathFinderNodes.nodes[idx];
+    start->point = &src;
+    start->opened = true;
+    idx++;
+    // end node
+    Node *end = &pathFinderNodes.nodes[idx];
+    end->point = &dst;    
+    idx++;
+    //CONSOLE.print("nodes=");
+    //CONSOLE.print(nodes.numNodes);
+    //CONSOLE.print(" idx=");
+    //CONSOLE.println(idx);
+    
+    
+    //CONSOLE.print("sz=");
+    //CONSOLE.println(sizeof(visitedPoints));
+    
+    int timeout = 1000;    
+    Node *currentNode = NULL;
+    
+    CONSOLE.print ("freem=");
+    CONSOLE.println (freeMemory ());
+    
+    CONSOLE.println("starting path-finder");
+    while(true) {       
+      if (millis() >= nextProgressTime){
+        nextProgressTime = millis() + 4000;          
+        CONSOLE.print(".");
+        watchdogReset();     
+      }
+      timeout--;            
+      if (timeout == 0){
+        CONSOLE.println("timeout");
+        break;
+      }
+      // Grab the lowest f(x) to process next
+      int lowInd = -1;
+      //CONSOLE.println("finding lowest cost node...");
+      for(int i=0; i<pathFinderNodes.numNodes; i++) {
+        if ((pathFinderNodes.nodes[i].opened) && ((lowInd == -1) || (pathFinderNodes.nodes[i].f < pathFinderNodes.nodes[lowInd].f))) { 
+          lowInd = i;
+          /*CONSOLE.print("opened node i=");
+          CONSOLE.print(i);
+          CONSOLE.print(" x=");
+          CONSOLE.print(pathFinderNodes.nodes[i].point->x());
+          CONSOLE.print(" y=");
+          CONSOLE.print(pathFinderNodes.nodes[i].point->y());
+          CONSOLE.print(" f=");          
+          CONSOLE.print(pathFinderNodes.nodes[i].f); 
+          CONSOLE.print(" lowInd=");          
+          CONSOLE.print(lowInd);                    
+          CONSOLE.println();*/           
+        }              
+      }
+      //CONSOLE.print("lowInd=");
+      //CONSOLE.println(lowInd);
+      if (lowInd == -1) break;
+      currentNode = &pathFinderNodes.nodes[lowInd]; 
+      // console.log('ol '+openList.length + ' cl ' + closedList.length + ' ' + currentNode.pos.X + ',' + currentNode.pos.Y);
+      // End case -- result has been found, return the traced path
+      if (distance(*currentNode->point, *end->point) < 0.02) break;        
+      // Normal case -- move currentNode from open to closed, process each of its neighbors      
+      currentNode->opened = false;
+      currentNode->closed = true;
+      //console.log('cn  pos'+currentNode.pos.X+','+currentNode.pos.Y);            
+      //console.log('neighbors '+neighbors.length);      
+      int neighborIdx = -1;
+      //CONSOLE.print("currentNode ");
+      //CONSOLE.print(currentNode->point->x);
+      //CONSOLE.print(",");
+      //CONSOLE.println(currentNode->point->y);      
+      while (true) {        
+        neighborIdx = findNextNeighbor(pathFinderNodes, pathFinderObstacles, *currentNode, neighborIdx); 
+        if (neighborIdx == -1) break;
+        Node* neighbor = &pathFinderNodes.nodes[neighborIdx];                
+        
+        if (millis() >= nextProgressTime){
+          nextProgressTime = millis() + 4000;          
+          CONSOLE.print("+");
+          watchdogReset();     
+        }
+        //CONSOLE.print("neighbor=");
+        //CONSOLE.print(neighborIdx);
+        //CONSOLE.print(":");
+        //CONSOLE.print(neighbor->point->x());
+        //CONSOLE.print(",");
+        //CONSOLE.println(neighbor->point->y());
+        //this.debugPaths.push( [currentNode.pos, neighbor.pos] );
+        // g score is the shortest distance from start to current node, we need to check if
+        //   the path we have arrived at this neighbor is the shortest one we have seen yet
+        //var gScore = currentNode.g + 1; // 1 is the distance from a node to it's neighbor
+        float gScore = currentNode->g + distance(*currentNode->point, *neighbor->point);
+        bool gScoreIsBest = false;
+        bool found = neighbor->opened;        
+        if (!found){          
+          // This the the first time we have arrived at this node, it must be the best
+          // Also, we need to take the h (heuristic) score since we haven't done so yet 
+          gScoreIsBest = true;
+          neighbor->h = calcHeuristic(*neighbor->point, *end->point);
+          neighbor->opened = true;
+        }
+        else if(gScore < neighbor->g) {
+          // We have already seen the node, but last time it had a worse g (distance from start)
+          gScoreIsBest = true;
+        } 
+        if(gScoreIsBest) {
+          // Found an optimal (so far) path to this node.   Store info on how we got here and
+          //  just how good it really is...
+          neighbor->parent = currentNode;
+          neighbor->g = gScore;
+          neighbor->f = neighbor->g + neighbor->h;
+          //neighbor.debug = "F: " + neighbor.f + "<br />G: " + neighbor.g + "<br />H: " + neighbor.h;
+        }
+      }
+    } 
+
+    CONSOLE.print("finish nodes=");
+    CONSOLE.print(pathFinderNodes.numNodes);
+    CONSOLE.print(" duration=");
+    CONSOLE.println(millis()-startTime);  
+
+    //delay(8000); // simulate a busy path finder
+
+    resetImuTimeout();
+
+    if ((currentNode != NULL) && (distance(*currentNode->point, *end->point) < 0.02)) {
+      Node *curr = currentNode;
+      int nodeCount = 0;
+      while(curr) {                
+        nodeCount++;
+        curr = curr->parent;        
+      }      
+      if (!freePoints.alloc(nodeCount)) return false;
+      curr = currentNode;
+      int idx = nodeCount-1;
+      while(curr) {                                
+        freePoints.points[idx].assign( *curr->point );
+        CONSOLE.print("node pt=");
+        CONSOLE.print(curr->point->x());
+        CONSOLE.print(",");
+        CONSOLE.println(curr->point->y());
+        idx--;
+        curr = curr->parent;                
+      }            
+    } else {
+      // No result was found
+      CONSOLE.println("pathfinder: no path");      
+      return false;
+      //freePoints.alloc(2);
+      //freePoints.points[0].assign(src);    
+      //freePoints.points[1].assign(dst);        
+    }       
   } else {  // path finder not enabled (ENABLE_PATH_FINDER=false)    
     if (!freePoints.alloc(2)) return false;
     freePoints.points[0].assign(src);    
@@ -2083,810 +2085,6 @@ bool Map::findPath(Point &src, Point &dst){
   return true;  
 }
 
-// Initialize pathfinding data structures (obstacles and nodes)
-bool Map::initializePathfinding(Point &src, Point &dst) {
-  // create path-finder obstacles    
-  int idx = 0;
-  if (!pathFinderObstacles.alloc(1 + exclusions.numPolygons + obstacles.numPolygons)) return false;
-  
-  if (MemoryMonitor::getFreeMemory() < 5000){
-    CONSOLE.println("OUT OF MEMORY");
-    return false;
-  }
-
-  // For validating a potential route, we will use  'linePolygonIntersectPoint' and check for intersections between route start point 
-  // and end point. To have something to check intersection with, we offset the perimeter (make bigger) and exclusions
-  //  (maker schmaller) and use them as 'obstacles'.
-  
-  if (!polygonOffset(perimeterPoints, pathFinderObstacles.polygons[idx], 0.04)) return false;
-  idx++;
-  
-  for (int i=0; i < exclusions.numPolygons; i++){
-    if (!polygonOffset(exclusions.polygons[i], pathFinderObstacles.polygons[idx], -0.04)) return false;
-    idx++;
-  }      
-  for (int i=0; i < obstacles.numPolygons; i++){
-    if (!polygonOffset(obstacles.polygons[i], pathFinderObstacles.polygons[idx], -0.04)) return false;
-    idx++;
-  }  
-  
-  // create nodes
-  int allocNodeCount = exclusions.numPoints() + obstacles.numPoints() + perimeterPoints.numPoints + 2;
-  CONSOLE.print ("freem=");
-  CONSOLE.print(MemoryMonitor::getFreeMemory());    
-  CONSOLE.print("  allocating nodes ");
-  CONSOLE.print(allocNodeCount);
-  CONSOLE.print(" (");
-  CONSOLE.print(sizeof(Node) * allocNodeCount);
-  CONSOLE.println(" bytes)");
-
-  if (!pathFinderNodes.alloc(allocNodeCount)) return false;
-  for (int i=0; i < pathFinderNodes.numNodes; i++){
-    pathFinderNodes.nodes[i].init();
-  }
-  // exclusion nodes
-  idx = 0;
-  for (int i=0; i < exclusions.numPolygons; i++){
-    for (int j=0; j < exclusions.polygons[i].numPoints; j++){    
-      pathFinderNodes.nodes[idx].point = &exclusions.polygons[i].points[j];
-      idx++;
-    }
-  }
-  // obstacle nodes    
-  for (int i=0; i < obstacles.numPolygons; i++){
-    for (int j=0; j < obstacles.polygons[i].numPoints; j++){    
-      pathFinderNodes.nodes[idx].point = &obstacles.polygons[i].points[j];
-      idx++;
-    }
-  }
-  // perimeter nodes
-  for (int j=0; j < perimeterPoints.numPoints; j++){    
-    pathFinderNodes.nodes[idx].point = &perimeterPoints.points[j];
-    idx++;
-  }      
-  // start node
-  Node *start = &pathFinderNodes.nodes[idx];
-  start->point = &src;
-  start->opened = true;
-  idx++;
-  // end node
-  Node *end = &pathFinderNodes.nodes[idx];
-  end->point = &dst;    
-  idx++;
-  
-  CONSOLE.print ("freem=");
-  CONSOLE.println (MemoryMonitor::getFreeMemory());
-  
-  return true;
-}
-
-// Process A* pathfinding algorithm
-Node* Map::processPathfindingNodes(Point &src, Point &dst, unsigned long startTime) {
-  unsigned long nextProgressTime = 0;
-  // Adaptive timeout based on problem size: base timeout + factor based on number of nodes
-  int baseTimeout = 500;
-  int adaptiveTimeout = baseTimeout + (pathFinderNodes.numNodes / 10);
-  int timeout = adaptiveTimeout;    
-  Node *currentNode = NULL;
-  Node *end = &pathFinderNodes.nodes[pathFinderNodes.numNodes-1]; // end node is last
-  
-  // Path-finder started
-  
-  // Early termination: Check if destination is directly reachable without obstacles
-  bool directPathPossible = true;
-  for (int i = 0; i < pathFinderObstacles.numPolygons; i++) {
-    if (linePolygonIntersection(src, dst, pathFinderObstacles.polygons[i])) {
-      directPathPossible = false;
-      break;
-    }
-  }
-  
-  if (directPathPossible) {
-    // Direct path possible - early termination
-    // Create simple two-point path
-    if (freePoints.alloc(2)) {
-      freePoints.points[0].assign(src);
-      freePoints.points[1].assign(dst);
-    }
-    return &pathFinderNodes.nodes[pathFinderNodes.numNodes-1]; // Return end node
-  }
-  
-  while(true) {       
-    if (millis() >= nextProgressTime){
-      nextProgressTime = millis() + 4000;          
-      // Progress indicator (removed for performance)
-      watchdogReset();     
-    }
-    timeout--;            
-    if (timeout == 0){
-      // Pathfinding timeout reached
-      break;
-    }
-    // Find the node with lowest f(x) value in open list
-    int lowInd = -1;
-    float lowestF = FLT_MAX;
-    for(int i=0; i<pathFinderNodes.numNodes; i++) {
-      if (pathFinderNodes.nodes[i].opened && pathFinderNodes.nodes[i].f < lowestF) { 
-        lowInd = i;
-        lowestF = pathFinderNodes.nodes[i].f;
-      }              
-    }
-    if (lowInd == -1) break; // No more open nodes
-    currentNode = &pathFinderNodes.nodes[lowInd]; 
-    // End case -- result has been found, return the traced path
-    if (calculateDistance(*currentNode->point, *end->point) < 0.02) break;        
-    // Normal case -- move currentNode from open to closed, process each of its neighbors      
-    currentNode->opened = false;
-    currentNode->closed = true;
-    
-    int neighborIdx = -1;
-    while (true) {        
-      neighborIdx = findNextNeighbor(pathFinderNodes, pathFinderObstacles, *currentNode, neighborIdx); 
-      if (neighborIdx == -1) break;
-      Node* neighbor = &pathFinderNodes.nodes[neighborIdx];                
-      
-      if (millis() >= nextProgressTime){
-        nextProgressTime = millis() + 4000;          
-        // Neighbor processing indicator (removed for performance)
-        watchdogReset();     
-      }
-      
-      float gScore = currentNode->g + calculateDistance(*currentNode->point, *neighbor->point);
-      bool gScoreIsBest = false;
-      bool found = neighbor->opened;        
-      if (!found){          
-        // This the the first time we have arrived at this node, it must be the best
-        // Also, we need to take the h (heuristic) score since we haven't done so yet 
-        gScoreIsBest = true;
-        neighbor->h = calcHeuristic(*neighbor->point, *end->point);
-        neighbor->opened = true;
-      }
-      else if(gScore < neighbor->g) {
-        // We have already seen the node, but last time it had a worse g (distance from start)
-        gScoreIsBest = true;
-      } 
-      if(gScoreIsBest) {
-        // Found an optimal (so far) path to this node.   Store info on how we got here and
-        //  just how good it really is...
-        neighbor->parent = currentNode;
-        neighbor->g = gScore;
-        neighbor->f = neighbor->g + neighbor->h;
-      }
-    }
-  } 
-
-  CONSOLE.print("finish nodes=");
-  CONSOLE.print(pathFinderNodes.numNodes);
-  CONSOLE.print(" duration=");
-  CONSOLE.println(millis()-startTime);  
-
-  resetImuTimeout();
-  
-  return currentNode;
-}
-
-// Reconstruct path from pathfinding result
-bool Map::reconstructPath(Node* resultNode, Point &dst) {
-  if ((resultNode != NULL) && (calculateDistance(*resultNode->point, dst) < 0.02)) {
-    Node *curr = resultNode;
-    int nodeCount = 0;
-    while(curr) {                
-      nodeCount++;
-      curr = curr->parent;        
-    }      
-    if (!freePoints.alloc(nodeCount)) return false;
-    curr = resultNode;
-    int idx = nodeCount-1;
-    while(curr) {                                
-      freePoints.points[idx].assign( *curr->point );
-      idx--;
-      curr = curr->parent;                
-    }            
-    // Apply path smoothing for more natural robot movements
-    smoothPath();
-  } else {
-    // No result was found
-    CONSOLE.println("pathfinder: no path");      
-    return false;
-  }       
-  return true;
-}
-
-// Smooth path by removing unnecessary waypoints that are in direct line of sight
-void Map::smoothPath() {
-  if (freePoints.numPoints < 3) return; // Need at least 3 points to smooth
-  
-  Polygon tempPoints;
-  if (!tempPoints.alloc(freePoints.numPoints)) return;
-  
-  int writeIdx = 0;
-  tempPoints.points[writeIdx++].assign(freePoints.points[0]); // Always keep start point
-  
-  for (int i = 1; i < freePoints.numPoints - 1; i++) {
-    Point &prev = tempPoints.points[writeIdx - 1];
-    Point &current = freePoints.points[i];
-    Point &next = freePoints.points[i + 1];
-    
-    // Check if we can skip current point by going directly from prev to next
-    bool canSkip = true;
-    
-    // Check if direct line from prev to next intersects with any obstacles
-    for (int j = 0; j < pathFinderObstacles.numPolygons; j++) {
-      if (linePolygonIntersection(prev, next, pathFinderObstacles.polygons[j])) {
-        canSkip = false;
-        break;
-      }
-    }
-    
-    // If we can't skip this point, add it to the smoothed path
-    if (!canSkip) {
-      tempPoints.points[writeIdx++].assign(current);
-    }
-  }
-  
-  tempPoints.points[writeIdx++].assign(freePoints.points[freePoints.numPoints - 1]); // Always keep end point
-  
-  // Copy smoothed path back to freePoints
-  freePoints.dealloc();
-  if (freePoints.alloc(writeIdx)) {
-    for (int i = 0; i < writeIdx; i++) {
-      freePoints.points[i].assign(tempPoints.points[i]);
-    }
-  }
-  
-  tempPoints.dealloc();
-}
-
-// Enhanced pathfinding with multiple route alternatives for docking
-bool Map::findPathWithAlternatives(Point &src, Point &dst) {
-  CONSOLE.println("findPathWithAlternatives: trying primary route");
-  
-  // First try the standard pathfinding
-  if (findPath(src, dst)) {
-    CONSOLE.println("findPathWithAlternatives: primary route successful");
-    return true;
-  }
-  
-  CONSOLE.println("findPathWithAlternatives: primary route failed, trying alternatives");
-  
-  // If primary route fails, try alternative routes
-  for (int i = 0; i < 3; i++) {
-    if (tryAlternativeRoute(src, dst, i)) {
-      CONSOLE.print("findPathWithAlternatives: alternative route ");
-      CONSOLE.print(i);
-      CONSOLE.println(" successful");
-      return true;
-    }
-  }
-  
-  // If all alternative routes failed, try different approach angles
-  CONSOLE.println("findPathWithAlternatives: trying alternative approach angles");
-  if (tryDockingWithAlternativeAngles(src, dst)) {
-    return true;
-  }
-  
-  CONSOLE.println("findPathWithAlternatives: all routes and angles failed");
-  return false;
-}
-
-// Try alternative route with different intermediate waypoints
-bool Map::tryAlternativeRoute(Point &src, Point &dst, int alternativeIndex) {
-  Point alternativePoints[4]; // Maximum 4 alternative waypoints
-  int numAlternatives = 0;
-  
-  generateAlternativeWaypoints(src, dst, alternativePoints, numAlternatives);
-  
-  if (alternativeIndex >= numAlternatives) return false;
-  
-  // Try route via alternative waypoint
-  Point intermediatePoint = alternativePoints[alternativeIndex];
-  
-  CONSOLE.print("tryAlternativeRoute: trying via (");
-  CONSOLE.print(intermediatePoint.x());
-  CONSOLE.print(",");
-  CONSOLE.print(intermediatePoint.y());
-  CONSOLE.println(")");
-  
-  // Check if route via intermediate point is viable
-  Point routePoints[3] = {src, intermediatePoint, dst};
-  if (!isRouteViable(src, dst, routePoints, 3)) {
-    return false;
-  }
-  
-  // Try first segment: src -> intermediate
-  if (!findPath(src, intermediatePoint)) {
-    return false;
-  }
-  
-  // Store first segment
-  Polygon firstSegment;
-  if (!firstSegment.alloc(freePoints.numPoints)) return false;
-  for (int i = 0; i < freePoints.numPoints; i++) {
-    firstSegment.points[i].assign(freePoints.points[i]);
-  }
-  firstSegment.numPoints = freePoints.numPoints;
-  
-  // Try second segment: intermediate -> dst
-  if (!findPath(intermediatePoint, dst)) {
-    firstSegment.dealloc();
-    return false;
-  }
-  
-  // Combine both segments
-  int totalPoints = firstSegment.numPoints + freePoints.numPoints - 1; // -1 to avoid duplicate intermediate point
-  Polygon combinedPath;
-  if (!combinedPath.alloc(totalPoints)) {
-    firstSegment.dealloc();
-    return false;
-  }
-  
-  // Copy first segment
-  for (int i = 0; i < firstSegment.numPoints; i++) {
-    combinedPath.points[i].assign(firstSegment.points[i]);
-  }
-  
-  // Copy second segment (skip first point to avoid duplication)
-  for (int i = 1; i < freePoints.numPoints; i++) {
-    combinedPath.points[firstSegment.numPoints + i - 1].assign(freePoints.points[i]);
-  }
-  combinedPath.numPoints = totalPoints;
-  
-  // Replace freePoints with combined path
-  freePoints.dealloc();
-  if (freePoints.alloc(totalPoints)) {
-    for (int i = 0; i < totalPoints; i++) {
-      freePoints.points[i].assign(combinedPath.points[i]);
-    }
-  }
-  
-  firstSegment.dealloc();
-  combinedPath.dealloc();
-  return true;
-}
-
-// Generate alternative waypoints for routing
-void Map::generateAlternativeWaypoints(Point &src, Point &dst, Point alternativePoints[], int &numAlternatives) {
-  numAlternatives = 0;
-  
-  float srcX = src.x();
-  float srcY = src.y();
-  float dstX = dst.x();
-  float dstY = dst.y();
-  
-  // Calculate perpendicular offsets to create alternative routes
-  float dx = dstX - srcX;
-  float dy = dstY - srcY;
-  float length = sqrt(dx*dx + dy*dy);
-  
-  if (length < 0.1) return; // Too short for alternatives
-  
-  // Normalize direction vector
-  dx /= length;
-  dy /= length;
-  
-  // Perpendicular vector
-  float perpX = -dy;
-  float perpY = dx;
-  
-  // Generate waypoints at different offsets and positions along the route
-  float offsets[] = {1.0, -1.0, 2.0}; // Left, right, far left
-  float positions[] = {0.3, 0.7, 0.5}; // Different positions along the route
-  
-  for (int i = 0; i < 3 && numAlternatives < 4; i++) {
-    float midX = srcX + dx * length * positions[i];
-    float midY = srcY + dy * length * positions[i];
-    
-    float altX = midX + perpX * offsets[i];
-    float altY = midY + perpY * offsets[i];
-    
-    // Check if alternative point is within perimeter and outside exclusions
-    Point altPoint(altX, altY);
-    if (isInsidePerimeterOutsideExclusions(altPoint)) {
-      alternativePoints[numAlternatives].setXY(altX, altY);
-      numAlternatives++;
-    }
-  }
-}
-
-// Check if a route via intermediate points is viable
-bool Map::isRouteViable(Point &src, Point &dst, Point intermediatePoints[], int numPoints) {
-  // Check each segment for major obstacles
-  for (int i = 0; i < numPoints - 1; i++) {
-    Point &segSrc = intermediatePoints[i];
-    Point &segDst = intermediatePoints[i + 1];
-    
-    // Quick check: if direct line intersects too many obstacles, route is not viable
-    int intersectionCount = 0;
-    for (int j = 0; j < pathFinderObstacles.numPolygons; j++) {
-      if (linePolygonIntersection(segSrc, segDst, pathFinderObstacles.polygons[j])) {
-        intersectionCount++;
-      }
-    }
-    
-    // If more than 2 obstacles block this segment, it's probably not viable
-    if (intersectionCount > 2) {
-      return false;
-    }
-  }
-  
-  return true;
-}
-
-// Enhanced retry logic for docking
-int Map::calculateRetrySteps(int retryCount) {
-  // Gradual retreat: more steps back for each retry attempt
-  // First retry: 1 step back, second: 2 steps, third: 3 steps, max 4 steps
-  int steps = retryCount + 1;
-  if (steps > 4) steps = 4;
-  return steps;
-}
-
-bool Map::shouldAllowRetry(unsigned long currentTime) {
-  // Minimum delay between retry attempts (5 seconds)
-  const unsigned long MIN_RETRY_DELAY = 5000;
-  
-  if (lastRetryTime == 0) return true; // First retry
-  
-  return (currentTime - lastRetryTime) >= MIN_RETRY_DELAY;
-}
-
-void Map::resetDockingRetryState() {
-  dockRetryCount = 0;
-  lastRetryTime = 0;
-  shouldRetryDock = false;
-  CONSOLE.println("resetDockingRetryState: retry state cleared");
-}
-
-// Alternative approach angles for docking
-bool Map::tryDockingWithAlternativeAngles(Point &src, Point &dst) {
-  CONSOLE.println("tryDockingWithAlternativeAngles: testing different approach angles");
-  
-  // Calculate base angle from source to destination
-  float baseAngle = pointsAngle(src.x(), src.y(), dst.x(), dst.y());
-  
-  // Generate alternative approach angles
-  float angles[8];
-  int numAngles = 0;
-  generateApproachAngles(dst, baseAngle, angles, numAngles);
-  
-  // Try each approach angle
-  for (int i = 0; i < numAngles; i++) {
-    if (isApproachAngleViable(src, dst, angles[i])) {
-      // Calculate approach point for this angle
-      Point approachPoint = calculateApproachPoint(dst, angles[i], 1.0); // 1 meter approach distance
-      
-      // Try to find path via this approach point
-      if (findPath(src, approachPoint)) {
-        CONSOLE.print("tryDockingWithAlternativeAngles: found viable approach at angle ");
-        CONSOLE.println(angles[i] * 180.0 / PI);
-        
-        // Add the final segment to destination
-        if (freePoints.numPoints < 100) { // Assume reasonable limit for free points
-          freePoints.points[freePoints.numPoints].assign(dst);
-          freePoints.numPoints++;
-        }
-        return true;
-      }
-    }
-  }
-  
-  CONSOLE.println("tryDockingWithAlternativeAngles: no viable approach angle found");
-  return false;
-}
-
-void Map::generateApproachAngles(Point &dst, float baseAngle, float angles[], int &numAngles) {
-  numAngles = 0;
-  
-  // Generate angles in increments of 45 degrees around the base angle
-  float angleIncrements[] = {0, PI/4, -PI/4, PI/2, -PI/2, 3*PI/4, -3*PI/4, PI};
-  
-  for (int i = 0; i < 8; i++) {
-    float angle = baseAngle + angleIncrements[i];
-    
-    // Normalize angle to [-PI, PI]
-    while (angle > PI) angle -= 2*PI;
-    while (angle < -PI) angle += 2*PI;
-    
-    angles[numAngles] = angle;
-    numAngles++;
-  }
-}
-
-Point Map::calculateApproachPoint(Point &dst, float angle, float distance) {
-  Point approachPoint;
-  
-  // Calculate point at specified distance and angle from destination
-  approachPoint.setXY(
-    dst.x() - distance * cos(angle),
-    dst.y() - distance * sin(angle)
-  );
-  
-  return approachPoint;
-}
-
-bool Map::isApproachAngleViable(Point &src, Point &dst, float angle) {
-  // Calculate approach point
-  Point approachPoint = calculateApproachPoint(dst, angle, 1.0);
-  
-  // Check if approach point is safe for robot
-  if (!isPointSafeForRobot(approachPoint.x(), approachPoint.y())) {
-    return false;
-  }
-  
-  // Check if direct line from approach point to destination is clear
-  bool hasObstacle = false;
-  for (int i = 0; i < exclusions.numPolygons; i++) {
-    if (linePolygonIntersection(approachPoint, dst, exclusions.polygons[i])) {
-      hasObstacle = true;
-      break;
-    }
-  }
-  
-  return !hasObstacle;
-}
-
-// Enhanced obstacle detection functions
-
-// Check if an obstacle is likely temporary based on detection patterns
-bool Map::isObstacleTemporary(Point &obstaclePos, unsigned long detectionTime) {
-  const float SAME_OBSTACLE_DISTANCE = 0.3; // 30cm threshold for same obstacle
-  const unsigned long TEMPORARY_THRESHOLD = 30000; // 30 seconds
-  
-  // Calculate distance to last known obstacle
-  float distance = calculateDistance(lastObstaclePos, obstaclePos);
-  
-  // If it's the same obstacle position
-  if (distance < SAME_OBSTACLE_DISTANCE) {
-    // If detected multiple times within threshold, likely permanent
-    if (detectionTime - lastObstacleTime < TEMPORARY_THRESHOLD) {
-      obstacleDetectionCount++;
-      if (obstacleDetectionCount >= 3) {
-        return false; // Likely permanent
-      }
-    } else {
-      // Reset count if enough time has passed
-      obstacleDetectionCount = 1;
-    }
-  } else {
-    // New obstacle position
-    obstacleDetectionCount = 1;
-    lastObstaclePos.assign(obstaclePos);
-  }
-  
-  lastObstacleTime = detectionTime;
-  return true; // Assume temporary initially
-}
-
-// Determine if robot should wait for obstacle clearance
-bool Map::shouldWaitForObstacleClearance(Point &obstaclePos) {
-  const unsigned long WAIT_TIME = 10000; // 10 seconds wait time
-  
-  if (obstacleMarkedPermanent) {
-    return false; // Don't wait for permanent obstacles
-  }
-  
-  unsigned long currentTime = millis();
-  
-  // Check if obstacle is likely temporary
-  if (isObstacleTemporary(obstaclePos, currentTime)) {
-    // Wait if we haven't been waiting too long
-    if (currentTime - lastObstacleTime < WAIT_TIME) {
-      CONSOLE.println("shouldWaitForObstacleClearance: waiting for temporary obstacle");
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-// Mark current obstacle as permanent
-void Map::markObstacleAsPermanent(Point &obstaclePos) {
-  obstacleMarkedPermanent = true;
-  lastObstaclePos.assign(obstaclePos);
-  CONSOLE.println("markObstacleAsPermanent: obstacle marked as permanent");
-}
-
-// Check if path is clear of obstacles (for re-checking after waiting)
-bool Map::hasObstacleClearedPath(Point &src, Point &dst) {
-  // Simple check - in real implementation this would use sensor data
-  // For now, assume path might be clear after waiting period
-  unsigned long currentTime = millis();
-  const unsigned long CLEARANCE_CHECK_INTERVAL = 5000; // 5 seconds
-  
-  if (currentTime - lastObstacleTime > CLEARANCE_CHECK_INTERVAL) {
-    // Reset obstacle detection state for new attempt
-    obstacleMarkedPermanent = false;
-    obstacleDetectionCount = 0;
-    CONSOLE.println("hasObstacleClearedPath: path may be clear, resetting obstacle state");
-    return true;
-  }
-  
-  return false;
-}
-
-// Docking position validation functions
-
-// Validate if docking position is suitable for starting docking sequence
-bool Map::validateDockingPosition(float robotX, float robotY) {
-  CONSOLE.println("validateDockingPosition: checking docking feasibility");
-  
-  // Check if we have valid docking points
-  if (dockPoints.numPoints == 0) {
-    CONSOLE.println("validateDockingPosition: no docking points available");
-    return false;
-  }
-  
-  // Get the target docking position
-  Point dockPos;
-  if (dockPointsIdx < dockPoints.numPoints) {
-    dockPos.assign(dockPoints.points[dockPointsIdx]);
-  } else {
-    dockPos.assign(dockPoints.points[0]); // Use first dock point as fallback
-  }
-  
-  // Check if docking station is accessible
-  if (!isDockingStationAccessible(dockPos)) {
-    CONSOLE.println("validateDockingPosition: docking station not accessible");
-    return false;
-  }
-  
-  // Check if docking area is clear
-  const float CLEARANCE_RADIUS = 0.5; // 50cm clearance radius
-  if (!isDockingAreaClear(dockPos, CLEARANCE_RADIUS)) {
-    CONSOLE.println("validateDockingPosition: docking area not clear");
-    return false;
-  }
-  
-  // Check distance to docking station
-  float distance = calculateDockingDistance(robotX, robotY);
-  const float MAX_DOCKING_DISTANCE = 10.0; // 10 meters maximum distance
-  if (distance > MAX_DOCKING_DISTANCE) {
-    CONSOLE.print("validateDockingPosition: distance too far: ");
-    CONSOLE.println(distance);
-    return false;
-  }
-  
-  CONSOLE.println("validateDockingPosition: docking position validated successfully");
-  return true;
-}
-
-// Check if docking station is accessible (no permanent obstacles blocking path)
-bool Map::isDockingStationAccessible(Point &dockPos) {
-  // Use actual robot position from state estimator
-  Point robotPos;
-  robotPos.setXY(stateX, stateY); // Current robot position from StateEstimator
-  
-  // Check if there's a clear path to docking station
-  // This is a simplified check - real implementation would use more sophisticated pathfinding
-  
-  // Check for intersections with exclusion zones
-  for (int i = 0; i < exclusions.numPolygons; i++) {
-    if (linePolygonIntersection(robotPos, dockPos, exclusions.polygons[i])) {
-      return false; // Path blocked by exclusion zone
-    }
-  }
-  
-  // Check for intersections with known permanent obstacles
-  for (int i = 0; i < obstacles.numPolygons; i++) {
-    if (linePolygonIntersection(robotPos, dockPos, obstacles.polygons[i])) {
-      return false; // Path blocked by obstacle
-    }
-  }
-  
-  return true; // Path appears clear
-}
-
-// Check if area around docking station is clear of obstacles
-bool Map::isDockingAreaClear(Point &dockPos, float clearanceRadius) {
-  // Check if docking position is safe for robot
-  if (!isPointSafeForRobot(dockPos.x(), dockPos.y())) {
-    return false;
-  }
-  
-  // Check points around docking position in a circle
-  const int NUM_CHECK_POINTS = 8;
-  for (int i = 0; i < NUM_CHECK_POINTS; i++) {
-    float angle = (2.0 * PI * i) / NUM_CHECK_POINTS;
-    float checkX = dockPos.x() + clearanceRadius * cos(angle);
-    float checkY = dockPos.y() + clearanceRadius * sin(angle);
-    
-    if (!isPointSafeForRobot(checkX, checkY)) {
-      return false; // Clearance area not safe
-    }
-  }
-  
-  return true; // Docking area is clear
-}
-
-// Calculate distance from robot to docking station
-float Map::calculateDockingDistance(float robotX, float robotY) {
-  if (dockPoints.numPoints == 0) {
-    return FLT_MAX; // No docking points available
-  }
-  
-  // Get target docking position
-  Point dockPos;
-  if (dockPointsIdx < dockPoints.numPoints) {
-    dockPos.assign(dockPoints.points[dockPointsIdx]);
-  } else {
-    dockPos.assign(dockPoints.points[0]); // Use first dock point as fallback
-  }
-  
-  // Calculate Euclidean distance
-  float dx = dockPos.x() - robotX;
-  float dy = dockPos.y() - robotY;
-  return sqrt(dx * dx + dy * dy);
-}
-
-// Adaptive docking speed control functions
-
-// Calculate adaptive speed based on distance to docking target
-float Map::calculateAdaptiveDockingSpeed(float distanceToTarget) {
-  // Define speed zones based on distance
-  const float PRECISION_ZONE = 0.5;    // Within 50cm - very slow
-  const float APPROACH_ZONE = 2.0;     // Within 2m - slow
-  const float NORMAL_ZONE = 5.0;       // Within 5m - medium
-  
-  // Define base speeds (as multipliers of normal speed)
-  const float PRECISION_SPEED = 0.2;   // 20% of normal speed
-  const float APPROACH_SPEED = 0.4;    // 40% of normal speed
-  const float NORMAL_SPEED = 0.7;      // 70% of normal speed
-  const float FAST_SPEED = 1.0;        // 100% of normal speed
-  
-  if (distanceToTarget <= PRECISION_ZONE) {
-    return PRECISION_SPEED;
-  } else if (distanceToTarget <= APPROACH_ZONE) {
-    // Linear interpolation between precision and approach speed
-    float ratio = (distanceToTarget - PRECISION_ZONE) / (APPROACH_ZONE - PRECISION_ZONE);
-    return PRECISION_SPEED + ratio * (APPROACH_SPEED - PRECISION_SPEED);
-  } else if (distanceToTarget <= NORMAL_ZONE) {
-    // Linear interpolation between approach and normal speed
-    float ratio = (distanceToTarget - APPROACH_ZONE) / (NORMAL_ZONE - APPROACH_ZONE);
-    return APPROACH_SPEED + ratio * (NORMAL_SPEED - APPROACH_SPEED);
-  } else {
-    return FAST_SPEED; // Full speed for distances > 5m
-  }
-}
-
-// Get speed multiplier based on distance
-float Map::getDockingSpeedMultiplier(float distance) {
-  return calculateAdaptiveDockingSpeed(distance);
-}
-
-// Check if robot should use precision mode (very slow, careful movement)
-bool Map::shouldUsePrecisionMode(float distance) {
-  const float PRECISION_THRESHOLD = 0.5; // 50cm
-  return distance <= PRECISION_THRESHOLD;
-}
-
-// Update docking speed profile with smooth transitions
-void Map::updateDockingSpeedProfile(float currentDistance, float &targetSpeed) {
-  float newTargetSpeed = calculateAdaptiveDockingSpeed(currentDistance);
-  
-  // Smooth speed transitions to avoid jerky movements
-  const float SPEED_CHANGE_RATE = 0.1; // Maximum change per update cycle
-  
-  if (newTargetSpeed > targetSpeed) {
-    // Accelerating - can be more aggressive
-    targetSpeed = min(newTargetSpeed, targetSpeed + SPEED_CHANGE_RATE * 2.0);
-  } else {
-    // Decelerating - be more conservative for safety
-    targetSpeed = max(newTargetSpeed, targetSpeed - SPEED_CHANGE_RATE);
-  }
-  
-  // Ensure speed stays within valid bounds
-  targetSpeed = max(0.1, min(1.0, targetSpeed)); // Between 10% and 100%
-  
-  // Log speed changes for debugging
-  static float lastLoggedSpeed = -1;
-  if (abs(targetSpeed - lastLoggedSpeed) > 0.05) { // Log only significant changes
-    CONSOLE.print("updateDockingSpeedProfile: distance=");
-    CONSOLE.print(currentDistance);
-    CONSOLE.print("m, speed=");
-    CONSOLE.println(targetSpeed);
-    lastLoggedSpeed = targetSpeed;
-  }
-}
 
 // path finder stress test
 void Map::stressTest(){  

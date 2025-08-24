@@ -110,10 +110,9 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 // NOTE: if using non-default Ardumower chassis and your freewheel is at frontside (gear motors at backside), have may have to swap motor cables, 
 // more info here: https://wiki.ardumower.de/index.php?title=Ardumower_Chassis_%27mountain_mod%27)
 #define FREEWHEEL_IS_AT_BACKSIDE   false   // default Ardumower: true   (change to false, if your freewheel is at frontside) - this is used for obstacle avoidance
-#define WHEEL_BASE_CM         38         // wheel-to-wheel distance (cm)        
+#define WHEEL_BASE_CM         39         // wheel-to-wheel distance (cm)        
 #define WHEEL_DIAMETER        205        // wheel diameter (mm)                 
-// NOTE: MOWER_SIZE removed - use ROBOT_WIDTH (line 436) for robot dimensions in meters
-
+#define MOWER_SIZE            60         // mower / chassis size / length in cm
 
 //#define ENABLE_ODOMETRY_ERROR_DETECTION  true    // use this to detect odometry erros
 #define ENABLE_ODOMETRY_ERROR_DETECTION  false
@@ -150,12 +149,11 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define MOTOR_FAULT_CURRENT 3.0    // gear motors fault current (amps)
 #define MOTOR_TOO_LOW_CURRENT 0.005   // gear motor too low current (amps), set to zero (0) to disable
 #define MOTOR_OVERLOAD_CURRENT 1.2    // gear motors overload current (amps)
-#define MOTOR_OVERLOAD_TIMEOUT 20000  // motor overload timeout (ms)
 
 #define MOTOR_OVERLOAD_SPEED  0.1    // speed (m/s) to use at motor overload
 
-#define USE_LINEAR_SPEED_RAMP  true      // use a speed ramp for the linear speed - aktiviert für sanftere Bewegungen
-//#define USE_LINEAR_SPEED_RAMP  false      // do not use a speed ramp 
+//#define USE_LINEAR_SPEED_RAMP  true      // use a speed ramp for the linear speed
+#define USE_LINEAR_SPEED_RAMP  false      // do not use a speed ramp 
 
 // motor speed control (PID coefficients) - these values are tuned for Ardumower motors
 // general information about PID controllers: https://wiki.ardumower.de/index.php?title=PID_control
@@ -184,7 +182,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 #define MOW_FAULT_CURRENT 8.0       // mowing motor fault current (amps)
 #define MOW_TOO_LOW_CURRENT 0.005   // mowing motor too low current (amps) , set to zero (0) to disable
-#define MOW_OVERLOAD_CURRENT 2.5    // mowing motor overload current (amps)
+#define MOW_OVERLOAD_CURRENT 2.0    // mowing motor overload current (amps)
 
 // should the direction of mowing motor toggle each start? (yes: true, no: false)
 #define MOW_TOGGLE_DIR       true
@@ -221,13 +219,6 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 //#define WIFI_IP   192,168,2,16      // choose IP e.g. 192,168,4,1  (comment out for dynamic IP/DHCP) - NOTE: use commans instead of points
 #define WIFI_SSID "ssid"            // choose WiFi network ID
 #define WIFI_PASS "pass"      // choose WiFi network password
-
-// --------- SimpleWifiRestart integration (experimental) ---------------------------------
-#define ENABLE_SIMPLE_WIFI_RESTART  // enable SimpleWifiRestart for automatic WiFi recovery (default: disabled)
-#define WIFI_RESTART_CHECK_INTERVAL 30000  // check interval (ms) for WiFi status (default: 30000)
-#define WIFI_RESTART_MAX_FAILURES 3  // max. consecutive failures before restart (default: 3)
-#define WIFI_RESTART_DELAY  10000  // delay (ms) before restarting WiFi (default: 10000)
-#define WIFI_RESTART_MAX_RETRIES  3  // max. number of retries to restart WiFi (default: 3)
 
 // client (app) --->  server (robot)
 #define ENABLE_SERVER true          // must be enabled if robot should act as server (recommended)
@@ -297,8 +288,8 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define BUMPER_ENABLE true
 //#define BUMPER_ENABLE false
 #define BUMPER_INVERT false       // invert bumper sensor state? 
-#define BUMPER_DEADTIME 800  		// linear motion dead-time (ms) after bumper is allowed to trigger
-#define BUMPER_TRIGGER_DELAY  50		// bumper must be active for (ms) to trigger
+#define BUMPER_DEADTIME 1000  		// linear motion dead-time (ms) after bumper is allowed to trigger
+#define BUMPER_TRIGGER_DELAY  0		// bumper must be active for (ms) to trigger
 #define BUMPER_MAX_TRIGGER_TIME 30	// if bumpersensor stays permanent triggered mower will stop with bumper error (time in seconds; 0 = disabled)																																				  
 
 // ------ LiDAR bumper ------------------------------------------
@@ -316,7 +307,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 //#define CURRENT_FACTOR 1.98   // PCB1.4 (non-bridged INA169, max. 2.5A)
 //#define CURRENT_FACTOR 2.941  // PCB1.4 (bridged INA169, max. 5A)
 
-#define GO_HOME_VOLTAGE   25.0  // start going to dock below this voltage
+#define GO_HOME_VOLTAGE   25.5  // start going to dock below this voltage
 // The battery will charge if both battery voltage is below that value and charging current is above that value.
 #define BAT_FULL_VOLTAGE  30.0  // start mowing again at this voltage
 #define BAT_UNDERVOLTAGE  18.9  // battery switch off voltage
@@ -369,14 +360,6 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define CPG_CONFIG_FILTER_NCNOTHRS 0   // C/N0 Threshold #SVs: 10 (robust), 6 (less robust)
 #define CPG_CONFIG_FILTER_CNOTHRS  0   // 30 dbHz (robust), 13 dbHz (less robust)
 
-// ------ GPS antenna offset correction -------------------------
-// GPS antenna position relative to robot center (in cm)
-// Positive X = forward, Positive Y = left, Positive Z = up
-#define ENABLE_ANTENNA_OFFSET true      // enable GPS antenna offset correction
-#define GPS_ANTENNA_OFFSET_X_CM  -20    // antenna offset X (cm) - negative = behind center
-#define GPS_ANTENNA_OFFSET_Y_CM   0     // antenna offset Y (cm) - zero = centered
-#define GPS_ANTENNA_OFFSET_Z_CM   25     // antenna offset Z (cm) - positive = above center
-
 
 // ------ obstacle detection and avoidance  -------------------------
 
@@ -390,7 +373,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 #define OBSTACLE_AVOIDANCE true   // try to find a way around obstacle
 //#define OBSTACLE_AVOIDANCE false  // stop robot on obstacle
-#define OBSTACLE_DIAMETER 1.0  // choose diameter of obstacles placed in front of robot (m) for obstacle avoidance
+#define OBSTACLE_DIAMETER 1.2   // choose diameter of obstacles placed in front of robot (m) for obstacle avoidance
 #define DISABLE_MOW_MOTOR_AT_OBSTACLE true // switch off mow motor while escape at detected obstacle; set false if mow motor shall not be stopped at detected obstacles
 
 // detect robot being kidnapped? robot will try GPS recovery if distance to tracked path is greater than a certain value
@@ -406,8 +389,8 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define DOCKING_STATION true   // use this if docking station available and mower should dock automatically
 //#define DOCKING_STATION false    // mower will just stop after mowing instead of docking automatically 
 
-//#define DOCK_IGNORE_GPS false     // use GPS fix in docking station and IMU for GPS float/invalid
-#define DOCK_IGNORE_GPS true     // ignore GPS fix in docking station and use IMU-only (use this if robot gets false GPS fixes in your docking station)
+#define DOCK_IGNORE_GPS false     // use GPS fix in docking station and IMU for GPS float/invalid
+//#define DOCK_IGNORE_GPS true     // ignore GPS fix in docking station and use IMU-only (use this if robot gets false GPS fixes in your docking station)
 
 #define DOCK_AUTO_START true     // robot will automatically continue mowing after docked automatically
 //#define DOCK_AUTO_START false      // robot will not automatically continue mowing after docked automatically
@@ -422,7 +405,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define DOCK_FRONT_SIDE true    // dock with mower front side (true) or back side (false)? 
 
 //#define DOCK_APRIL_TAG 1         // use visual (april-tag) docking?
-#define DOCK_LINEAR_SPEED 0.15   // linear speed for docking
+#define DOCK_LINEAR_SPEED 0.1   // linear speed for docking
 
 #define DOCK_DETECT_OBSTACLE_IN_DOCK true   // enable obstacle detection in dock?
 
@@ -430,22 +413,15 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 // ---- path tracking -----------------------------------
 
 // below this robot-to-target distance (m) a target is considered as reached
-#define TARGET_REACHED_TOLERANCE 0.15
+#define TARGET_REACHED_TOLERANCE 0.1
 
 // stanley control for path tracking - determines gain how fast to correct for lateral path errors
 #define STANLEY_CONTROL_P_NORMAL  1.1   // 3.0 for path tracking control (angular gain) when mowing
 #define STANLEY_CONTROL_K_NORMAL  0.1   // 1.0 for path tracking control (lateral gain) when mowing
 
-#define STANLEY_CONTROL_P_SLOW    1.0   // 1.0 for path tracking control (angular gain) when docking tracking
-#define STANLEY_CONTROL_K_SLOW    0.05   // 0.2 for path tracking control (lateral gain) when docking tracking
+#define STANLEY_CONTROL_P_SLOW    1.1   // 1.0 for path tracking control (angular gain) when docking tracking
+#define STANLEY_CONTROL_K_SLOW    0.1   // 0.2 for path tracking control (lateral gain) when docking tracking
 
-// ---- pathfinder safety offsets ----------------------------
-// robot dimensions and safety margins for path planning
-#define ROBOT_WIDTH               0.40   // robot width (m) - actual width of the mower
-#define ROBOT_LENGTH              0.64   // robot length (m) - actual length of the mower
-#define PERIMETER_SAFETY_OFFSET   0.35   // safety distance from perimeter (m) - prevents collision with boundary
-#define EXCLUSION_SAFETY_OFFSET   0.25   // safety distance from exclusion zones (m) - prevents entering forbidden areas
-#define OBSTACLE_SAFETY_OFFSET    0.20   // safety distance from detected obstacles (m) - dynamic obstacle avoidance
 
 // ----- other options --------------------------------------------
 
@@ -528,7 +504,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
   #define GPS_HOST "127.0.0.1"  
   #define GPS_PORT 2947
   #define ROBOT SerialROBOT
-  #define SERIAL_ROBOT_PATH "/dev/ttyS0"  
+  #define SERIAL_ROBOT_PATH "/dev/ttyS0"
   #define NTRIP SerialNTRIP
   #define SERIAL_NTRIP_PATH "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_00000000-if00-port0"    
 #endif

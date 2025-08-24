@@ -12,7 +12,7 @@
 
 
 
-String RelocalizationOp::getOperationName(){
+String RelocalizationOp::name(){
     return "Relocalization";
 }
 

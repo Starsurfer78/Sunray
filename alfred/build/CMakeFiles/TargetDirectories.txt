@@ -1,3 +1,0 @@
-/home/Sascha/Sunray/alfred/build/CMakeFiles/sunray.dir
-/home/Sascha/Sunray/alfred/build/CMakeFiles/edit_cache.dir
-/home/Sascha/Sunray/alfred/build/CMakeFiles/rebuild_cache.dir

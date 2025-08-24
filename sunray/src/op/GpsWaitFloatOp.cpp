@@ -10,8 +10,8 @@
 #include "../../events.h"
 
 
-String GpsWaitFloatOp::getOperationName(){
-    return "GpsWaitFloat";
+String GpsWaitFloatOp::name(){
+  return "GpsWaitFloat";
 }
 
 void GpsWaitFloatOp::begin(){

@@ -13,21 +13,6 @@
 enum MotorSelect {MOTOR_LEFT, MOTOR_RIGHT, MOTOR_MOW} ;
 typedef enum MotorSelect MotorSelect;
 
-// Motor sensing constants
-static const float CURRENT_LP_FILTER_COEFF = 0.995f;     // Low-pass filter coefficient for current sensing
-static const float MOW_PWM_LP_FILTER_COEFF = 0.99f;      // Low-pass filter coefficient for mow PWM
-static const unsigned long SENSE_INTERVAL_MS = 20;       // Motor sensing interval in milliseconds
-static const float ROBOT_MASS_FACTOR = 1.0f;             // Robot mass factor for normalized current calculation
-
-// Motor run() function constants
-static const unsigned long MOTOR_CONTROL_INTERVAL_MS = 50;        // Motor control loop interval in milliseconds
-static const unsigned long MOTOR_FAULT_RECOVERY_DELAY_MS = 1000;  // Delay before attempting motor fault recovery
-static const unsigned long MOTOR_FAULT_RECOVERY_TIMEOUT_MS = 10000; // Timeout for motor fault recovery attempts
-static const float RPM_LP_FILTER_COEFF = 0.9f;                   // Low-pass filter coefficient for RPM calculation
-static const float MOW_TICKS_PER_REVOLUTION = 6.0f;              // Assumed ticks per revolution for mow motor
-static const int MAX_MOTOR_FAULT_RECOVERY_ATTEMPTS = 10;          // Maximum number of motor fault recovery attempts
-static const int ZERO_TICK_THRESHOLD = 2;                         // Threshold for detecting zero ticks before setting RPM to 0
-
 
 class Motor {
   public:
@@ -122,19 +107,7 @@ class Motor {
     bool checkCurrentTooHighError();    
     bool checkCurrentTooLowError();
     void sense();
-    void dumpOdoTicks(int seconds);
-    float calculatePitchFactor(int motorPWMCurr, float cosPitch) const;
-    void applyCurrentFiltering();
-    void calculateNormalizedCurrents();
-    bool detectMotorFaults();
-    void handleMotorRecovery();
-    void handleLinearAngularSpeedTimeout();
-    void processEncoderTicksAndCalculateRpm();
-    void computeMotorPidControl(PID& motorPID, LowPassFilter& motorLpf, float rpmCurr, float rpmSet, int& pwmCurr, const char* motorName);
-    void logMotorCurrentError(const char* motorName, float currentValue, float thresholdValue, const char* comparison, int pwmValue = -1);
-    void logMotorFaultError(const char* motorName, const char* faultType);
-    void applyPwmZeroingForLowRpm();
-    void initializePidAndLpfControllers();
+    void dumpOdoTicks(int seconds);    
 };
 
 

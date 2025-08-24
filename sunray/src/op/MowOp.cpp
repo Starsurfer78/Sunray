@@ -12,16 +12,13 @@
 #include "../../map.h"
 #include "../../events.h"
 
-// MowOp constants
-const int MAP_ROUTING_FAILED_RESET_VALUE = 60;
-
 
 MowOp::MowOp(){
     lastMapRoutingFailed = false;
     mapRoutingFailedCounter = 0;
 }
 
-String MowOp::getOperationName(){
+String MowOp::name(){
     return "Mow";
 }
 
@@ -65,7 +62,7 @@ void MowOp::begin(){
     if (routingFailed){
         lastMapRoutingFailed = true; 
         mapRoutingFailedCounter++;    
-        if (mapRoutingFailedCounter > MAP_ROUTING_FAILED_RESET_VALUE){
+        if (mapRoutingFailedCounter > 60){
             CONSOLE.println("error: too many map routing errors!");
             stateSensor = SENS_MAP_NO_ROUTE;
             Logger.event(EVT_ERROR_NO_MAP_ROUTE_GIVEUP);
@@ -85,22 +82,14 @@ void MowOp::end(){
 }
 
 void MowOp::run(){
-    performObstacleDetection();
+    if (!detectObstacle()){
+        detectObstacleRotation();                              
+    }        
     // line tracking
     trackLine(true); 
     detectSensorMalfunction();    
     battery.resetIdle();
     
-    checkTimetableConditions();
-}
-
-void MowOp::performObstacleDetection(){
-    if (!detectObstacle()){
-        detectObstacleRotation();                              
-    }
-}
-
-void MowOp::checkTimetableConditions(){
     if (timetable.shouldAutostopNow()){
         if (DOCKING_STATION){
             CONSOLE.println("TIMETABLE - DOCKING");
@@ -204,7 +193,7 @@ void MowOp::onOdometryError(){
     
 void MowOp::onMotorOverload(){
   if (ENABLE_OVERLOAD_DETECTION){
-    if (motor.motorOverloadDuration > MOTOR_OVERLOAD_TIMEOUT){
+    if (motor.motorOverloadDuration > 20000){
         CONSOLE.println("error: motor overload!");    
         stateSensor = SENS_OVERLOAD;
         Logger.event(EVT_ERROR_MOTOR_OVERLOAD);
@@ -256,27 +245,31 @@ void MowOp::onTargetReached(){
 }
 
 
-// Central GPS issue handling to eliminate code duplication
-void MowOp::handleGpsIssue(Sensor sensorType, Op& targetOp){
+void MowOp::onGpsFixTimeout(){
+    // no gps solution
     if (REQUIRE_VALID_GPS){
 #ifdef UNDOCK_IGNORE_GPS_DISTANCE
         if (!maps.isUndocking() || getDockDistance() > UNDOCK_IGNORE_GPS_DISTANCE){
 #else
         if (!maps.isUndocking()){
 #endif
-            stateSensor = sensorType;            
-            changeOp(targetOp, true);
+            stateSensor = SENS_GPS_FIX_TIMEOUT;            
+            changeOp(gpsWaitFixOp, true);
         }
     }
 }
 
-void MowOp::onGpsFixTimeout(){
-    // no gps solution
-    handleGpsIssue(SENS_GPS_FIX_TIMEOUT, gpsWaitFixOp);
-}
-
 void MowOp::onGpsNoSignal(){
-    handleGpsIssue(SENS_GPS_INVALID, gpsWaitFloatOp);
+    if (REQUIRE_VALID_GPS){
+#ifdef UNDOCK_IGNORE_GPS_DISTANCE
+        if (!maps.isUndocking() || getDockDistance() > UNDOCK_IGNORE_GPS_DISTANCE){
+#else
+        if (!maps.isUndocking()){
+#endif
+            stateSensor = SENS_GPS_INVALID;            
+            changeOp(gpsWaitFloatOp, true);
+        }
+    }
 }
 
 void MowOp::onKidnapped(bool state){

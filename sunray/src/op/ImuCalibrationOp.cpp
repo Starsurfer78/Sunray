@@ -12,7 +12,7 @@
 
 
 
-String ImuCalibrationOp::getOperationName(){
+String ImuCalibrationOp::name(){
     return "ImuCalibration";
 }
 
@@ -44,8 +44,9 @@ void ImuCalibrationOp::run(){
         CONSOLE.print("IMU gyro calibration (robot must be static)... ");        
         CONSOLE.println(imuCalibrationSeconds);        
         buzzer.sound(SND_PROGRESS, true);
-        // Extended calibration time to 15 seconds for better stability (especially on Linux/Alfred)
-        if (imuCalibrationSeconds >= 15){
+        // TODO/FIXME: let's try more than 9 seconds: it seems in Alfred (Linux), MPU6050 sometimes takes more than 9 secs to work stable?                 
+        if (imuCalibrationSeconds >= 15){        
+        //if (imuCalibrationSeconds >= 9){
             imuIsCalibrating = false;
             lastIMUYaw = 0;          
             imuDriver.resetData();

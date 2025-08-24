@@ -49,11 +49,7 @@ float serialToFloat(HardwareSerial *serial);
 
 float parseFloatValue(String s, String key);
 
-// Include new memory monitoring system
-#include "src/memory_monitor.h"
-
-// Legacy function - use MemoryMonitor::getFreeMemory() instead
-
+int freeRam ();
 
 /*
  * Returns random number in normal distribution centering on 0.
@@ -74,11 +70,12 @@ float gaussian(float mu, float sigma, float x);
 
 // Spannungsteiler Gesamtspannung ermitteln (Reihenschaltung R1-R2, U2 bekannt, U_GES zu ermitteln)
 float voltageDividerUges(float R1, float R2, float U2);
+
+// ADC-value to voltage
 float ADC2voltage(float ADCvalue);
 
-// Include zentrale Quaternion-Mathematik
-#include "QuaternionMath.h"
 
-
+// quaternion to euler angles
+void toEulerianAngle(float w, float x, float y, float z, float& roll, float& pitch, float& yaw);
 
 #endif

@@ -8,7 +8,7 @@
 #include "../../robot.h"
 #include "../../map.h"
 
-String GpsRebootRecoveryOp::getOperationName(){
+String GpsRebootRecoveryOp::name(){
     return "GpsRebootRecovery";
 }
 

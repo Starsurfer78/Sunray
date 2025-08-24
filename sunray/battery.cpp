@@ -1,4 +1,4 @@
-// Ardumower Sunray 
+ // Ardumower Sunray 
 // Copyright (c) 2013-2020 by Alexander Grau, Grau GmbH
 // Licensed GPLv3 for open source use
 // or Grau GmbH Commercial License for commercial use (http://grauonline.de/cms2/?page_id=153)
@@ -11,13 +11,13 @@
 #include "buzzer.h"
 #include <Arduino.h>
 
-// Lithium batteries should be charged with CC (constant current) up to a certain value
-// and then with CV (constant voltage)
-// To increase lifespan, the max voltage can be reduced
-// We use 7S (7 * 4.2V) in the Ardumower
-// Fully charged ends at 29.4V
-// If you reduce the voltage from 4.2V per cell to 4.1V (85-90% charged), you can
-// double the lifespan - the same applies to discharge
+// lithium akkus sollten bis zu einem bestimmten wert CC also constant current geladen werden 
+// und danach mit CV constant voltage
+// um die lebensdauer zu erhöhen kann man die max spannung herabsetzen
+// wir verwenden im Ardumower ein 7S (7 * 4.2V)
+// voll geladen ist dann bei 29.4V schluss
+// wenn man z.B. die spannung von 4.2V pro zelle auf 4.1V herab setzt (85–90% charged) kann man die lebensdauer 
+// verdoppeln - das gleiche gilt bei der endladung
 
 // lithium cells
 // ardumower:  Sony US18650 VTC5, 7 cells in series, nominal volage 3.6v

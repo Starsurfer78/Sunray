@@ -11,7 +11,7 @@
 
 
 
-String EscapeReverseOp::getOperationName(){
+String EscapeReverseOp::name(){
     return "EscapeReverse";
 }
 

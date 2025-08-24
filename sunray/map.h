@@ -10,13 +10,6 @@
 #include <Arduino.h>
 #include <SD.h>
 
-// Common allocation helper template to reduce code duplication
-template<typename T>
-struct AllocationHelper {
-  static bool validateSize(short size, short maxSize, const char* typeName);
-  static void reportAllocError(const char* typeName);
-};
-
 
 // waypoint type
 enum WayType {WAY_PERIMETER, WAY_EXCLUSION, WAY_DOCK, WAY_MOW, WAY_FREE};
@@ -45,8 +38,7 @@ class Polygon
 {
   public:
     Point *points;    
-    short numPoints;
-    bool stackAllocated; // Track if points were allocated using stack allocator    
+    short numPoints;    
     Polygon();
     Polygon(short aNumPoints);
     ~Polygon();
@@ -100,8 +92,7 @@ class NodeList  // owns nodes!
 {
   public:
     Node *nodes;    
-    short numNodes;
-    bool stackAllocated; // Track if nodes were allocated using stack allocator
+    short numNodes;     
     NodeList();
     NodeList(short aNumNodes);
     ~NodeList();
@@ -162,15 +153,7 @@ class Map
            
     bool shouldDock;  // start docking?
     bool shouldRetryDock; // retry docking?
-    bool shouldMow;  // start mowing?
-    int dockRetryCount; // number of retry attempts
-    unsigned long lastRetryTime; // timestamp of last retry attempt
-    
-    // Enhanced obstacle detection variables
-    Point lastObstaclePos; // position of last detected obstacle
-    unsigned long lastObstacleTime; // timestamp of last obstacle detection
-    bool obstacleMarkedPermanent; // whether current obstacle is marked as permanent
-    int obstacleDetectionCount; // number of times same obstacle was detected       
+    bool shouldMow;  // start mowing?       
     
     long mapCRC;  // map data CRC
         
@@ -194,7 +177,6 @@ class Map
 
     // -------mowing operation--------------------------------------
     bool checkpoint(float x, float y);
-    bool isPointSafeForRobot(float x, float y); // Enhanced pathfinder with safety offsets
     // call to inform mapping to start mowing  
     bool startMowing(float stateX, float stateY);    
     // has mowing completed?
@@ -250,7 +232,7 @@ class Map
     bool nextMowPoint(bool sim);
     bool nextDockPoint(bool sim);
     bool nextFreePoint(bool sim);        
-    float calculateDistance(Point &src, Point &dst);        
+    float distance(Point &src, Point &dst);        
     float pointsAngle(float x1, float y1, float x2, float y2);
     float scalePI(float v);
     float distancePI(float x, float w);
@@ -268,50 +250,6 @@ class Map
     bool isPointInBoundingBox(Point &pt, Point &A, Point &B);
     int linePolygonIntersectionCount(Point &src, Point &dst, Polygon &poly);
     void testIntegerCalcs();
-    
-    // Helper function for pathfinder safety calculations
-    float distanceToPolygonEdge(float x, float y, Polygon &polygon);
-    
-    // Refactored helper functions for findPath()
-    bool initializePathfinding(Point &src, Point &dst);
-    Node* processPathfindingNodes(Point &src, Point &dst, unsigned long startTime);
-    bool reconstructPath(Node* resultNode, Point &dst);
-    void smoothPath(); // Smooth path by removing unnecessary waypoints
-    
-    // Enhanced pathfinding and docking functions
-    bool findPathWithAlternatives(Point &src, Point &dst);
-    bool tryAlternativeRoute(Point &src, Point &dst, int alternativeIndex);
-    void generateAlternativeWaypoints(Point &src, Point &dst, Point alternativePoints[], int &numAlternatives);
-    bool isRouteViable(Point &src, Point &dst, Point intermediatePoints[], int numPoints);
-    
-    // Enhanced retry logic functions
-    int calculateRetrySteps(int retryCount);
-    bool shouldAllowRetry(unsigned long currentTime);
-    void resetDockingRetryState();
-    
-    // Alternative approach angle functions
-    bool tryDockingWithAlternativeAngles(Point &src, Point &dst);
-    void generateApproachAngles(Point &dst, float baseAngle, float angles[], int &numAngles);
-    Point calculateApproachPoint(Point &dst, float angle, float distance);
-    bool isApproachAngleViable(Point &src, Point &dst, float angle);
-    
-    // Enhanced obstacle detection for docking
-    bool isObstacleTemporary(Point &obstaclePos, unsigned long detectionTime);
-    bool shouldWaitForObstacleClearance(Point &obstaclePos);
-    void markObstacleAsPermanent(Point &obstaclePos);
-    bool hasObstacleClearedPath(Point &src, Point &dst);
-    
-    // Docking position validation
-    bool validateDockingPosition(float robotX, float robotY);
-    bool isDockingStationAccessible(Point &dockPos);
-    bool isDockingAreaClear(Point &dockPos, float clearanceRadius);
-    float calculateDockingDistance(float robotX, float robotY);
-    
-    // Adaptive docking speed control
-    float calculateAdaptiveDockingSpeed(float distanceToTarget);
-    float getDockingSpeedMultiplier(float distance);
-    bool shouldUsePrecisionMode(float distance);
-    void updateDockingSpeedProfile(float currentDistance, float &targetSpeed);
 };
 
 

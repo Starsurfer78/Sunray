@@ -33,20 +33,11 @@ function build_sunray() {
 
   CONFIG_PATHNAME=$PWD/$CONFIG_FILE
   sudo rm ../sunray/config.h
-  
-  # Automatisches Leeren des Build-Verzeichnisses bei Neuinstallation
-  echo "Clearing build directory for clean installation..."
   rm -f CMakeCache.txt
   rm -f cmake_install.cmake
   rm -Rf CMakeFiles
-  
-  # Build-Verzeichnis komplett leeren und neu erstellen
-  if [ -d "build" ]; then
-    rm -Rf build
-  fi
-  mkdir -p build
-  
   cd build
+  rm -Rf * 
   #exit
   cmake -D CONFIG_FILE=$CONFIG_PATHNAME ..
   make 
@@ -447,47 +438,6 @@ main_menu () {
     done
 }
 
-
-# Check for command line arguments
-if [ $# -gt 0 ]; then
-  case $1 in
-    "install")
-      echo "Installing Sunray with automatic build..."
-      build_sunray
-      echo "Build completed successfully!"
-      exit 0
-      ;;
-    "rebuild")
-      echo "Rebuilding Sunray..."
-      rebuild_sunray
-      echo "Rebuild completed successfully!"
-      exit 0
-      ;;
-    "clean")
-      echo "Cleaning build directory..."
-      rm -rf build
-      rm -f CMakeCache.txt
-      rm -f cmake_install.cmake
-      rm -rf CMakeFiles
-      echo "Build directory cleaned!"
-      exit 0
-      ;;
-    "help")
-      echo "Usage: $0 [install|rebuild|clean|help]"
-      echo "  install  - Build sunray executable (interactive config selection)"
-      echo "  rebuild  - Rebuild sunray executable (using last config)"
-      echo "  clean    - Clean build directory"
-      echo "  help     - Show this help message"
-      echo "  (no args)- Show interactive menu"
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1"
-      echo "Use '$0 help' for usage information"
-      exit 1
-      ;;
-  esac
-fi
 
 # show main menu
 while true

@@ -10,8 +10,8 @@
 #include "../../map.h"
 #include "../../events.h"
 
-String KidnapWaitOp::getOperationName(){
-    return "KidnapWait";
+String KidnapWaitOp::name(){
+  return "KidnapWait";
 }
 
 void KidnapWaitOp::begin(){    

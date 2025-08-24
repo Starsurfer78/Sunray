@@ -12,7 +12,7 @@
 #include "../../helper.h"
 
 
-String ChargeOp::getOperationName(){
+String ChargeOp::name(){
     return "Charge";
 }
 

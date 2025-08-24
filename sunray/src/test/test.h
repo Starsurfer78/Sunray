@@ -55,7 +55,7 @@ class ObstacleAvoidanceTest: public Test {
     unsigned long imuFailureTime;
     float targetX;
     float targetY;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -64,7 +64,7 @@ class ObstacleAvoidanceTest: public Test {
 class MotorFaultTest: public Test {
   public:
     unsigned long nextFaultTime;
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -77,7 +77,7 @@ class BumperTest: public Test {
     bool triggerAllowed;
     unsigned long nextBumperTime;
     unsigned long releaseBumperTime;    
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;
@@ -100,7 +100,7 @@ class SessionTest: public Test {
 
     unsigned long nextGoDockVoltageTime;    
 
-    virtual String getOperationName() override;
+    virtual String name() override;
     virtual void begin() override;
     virtual void end() override;
     virtual void run() override;

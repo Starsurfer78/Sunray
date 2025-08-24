@@ -41,7 +41,7 @@ Op::Op(){
     shouldStop = false;
 }
 
-String Op::getOperationName(){
+String Op::name(){
     return "Op";
 }
 
@@ -130,7 +130,7 @@ Op* Op::getGoalOp(){
 }
 
 String Op::getOpChain(){
-    String opChain = getOperationName();
+    String opChain = name();
     opChain += "(initiatedByOperator ";
     opChain += initiatedByOperator;
     opChain += ")";
@@ -140,7 +140,7 @@ String Op::getOpChain(){
         goalOp = goalOp->nextOp;
         if (goalOp == this) break; // avoid infinite loops if same op as this
         opChain += "->";
-        opChain += goalOp->getOperationName();
+        opChain += goalOp->name();
         chainCounter++;
         if (chainCounter > 10){
           CONSOLE.println("ERROR Op::getOpChain: invalid op chain (infinity)");

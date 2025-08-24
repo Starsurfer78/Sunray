@@ -10,7 +10,6 @@
 #include "httpserver.h"
 #include "ble.h"
 #include "events.h"
-#include "src/memory_monitor.h"
 
 #ifdef __linux__
   #include <BridgeClient.h>
@@ -64,8 +63,8 @@ void cmdTuneParam(){
   int lastCommaIdx = 0;
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    // Serial.print("ch=");
-    // Serial.println(ch);
+    //Serial.print("ch=");
+    //Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
       float floatValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();
       if (counter == 1){                            
@@ -132,8 +131,8 @@ void cmdControl(){
   float wayPerc = -1;  
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    // Serial.print("ch=");
-    // Serial.println(ch);
+    //Serial.print("ch=");
+    //Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
       int intValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toInt();
       float floatValue = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();
@@ -197,8 +196,8 @@ void cmdMotor(){
   float angular=0;
   for (int idx=0; idx < cmd.length(); idx++){
     char ch = cmd[idx];
-    // Serial.print("ch=");
-    // Serial.println(ch);
+    //Serial.print("ch=");
+    //Serial.println(ch);
     if ((ch == ',') || (idx == cmd.length()-1)){
       float value = cmd.substring(lastCommaIdx+1, ch==',' ? idx : idx+1).toFloat();
       if (counter == 1){                            
@@ -706,7 +705,7 @@ void cmdStats(){
   s += ",";
   s += statMowObstacles;
   s += ",";
-  s += MemoryMonitor::getFreeMemory();
+  s += freeMemory();
   s += ",";
   s += getResetCause();
   s += ",";
@@ -1058,7 +1057,7 @@ void outputConsole(){
       #endif
     #else
       CONSOLE.print (" freem=");
-      CONSOLE.print (MemoryMonitor::getFreeMemory());  
+      CONSOLE.print (freeMemory());  
       uint32_t *spReg = (uint32_t*)__get_MSP();   // stack pointer
       CONSOLE.print (" sp=");
       CONSOLE.print (*spReg, HEX);

@@ -408,8 +408,8 @@ void AmMotorDriver::setMotorDriver(int pinDir, int pinPWM, int speed, DriverChip
   if ((speed == 0) && (chip.keepPwmZeroSpeed)) {
     // driver does not require periodic signal at zero speed, we can output 'silence' for zero speed    
   } else {
-    // Prevents the PWM signal from becoming 0. The driver needs a short pulse to detect the PWM.
-    // If it goes from max PWM value to 0 or the signal goes low, it retains the previous value and the motor does not stop
+    // verhindert dass das PWM Signal 0 wird. Der Driver braucht einen kurzen Impuls um das PWM zu erkennen.
+    // Wenn der z.B. vom max. PWM Wert auf 0 bzw. das Signal auf Low geht, behält er den vorherigen Wert bei und der Motor stoppt nicht
     if (abs(speed) < chip.minPwmSpeed) speed = chip.minPwmSpeed * speedSign;
     if (abs(speed) > chip.maxPwmSpeed) speed = chip.maxPwmSpeed * speedSign;  
   }

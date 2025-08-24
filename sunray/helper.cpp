@@ -9,9 +9,9 @@
 #include "config.h"
 
 
-// Calculate total voltage of voltage divider (series connection R1-R2, U2 known, U_total to be determined)
+// Spannungsteiler Gesamtspannung ermitteln (Reihenschaltung R1-R2, U2 bekannt, U_GES zu ermitteln)
 float voltageDividerUges(float R1, float R2, float U2){
-	return (U2/R2 * (R1+R2));  // Utotal 
+	return (U2/R2 * (R1+R2));  // Uges 
 }
 
 
@@ -271,7 +271,15 @@ float serialToFloat(HardwareSerial* serial){
   return b.floatingPoint;
 }
 
-
+int freeRam () {
+#ifdef __AVR__
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+#else
+  return 0;
+#endif
+}
 
 
 
@@ -329,5 +337,27 @@ float parseFloatValue(String s, String key){
     n+= s[idx]; idx++;
   }
   return n.toFloat();
+}
+
+
+void toEulerianAngle(float w, float x, float y, float z, float& roll, float& pitch, float& yaw)
+{
+  double ysqr = y * y;
+
+  // roll (x-axis rotation)
+  double t0 = +2.0 * (w * x + y * z);
+  double t1 = +1.0 - 2.0 * (x * x + ysqr);
+  roll = atan2(t0, t1);
+
+  // pitch (y-axis rotation)
+  double t2 = +2.0 * (w * y - z * x);
+  t2 = t2 > 1.0 ? 1.0 : t2;
+  t2 = t2 < -1.0 ? -1.0 : t2;
+  pitch = asin(t2);
+
+  // yaw (z-axis rotation)
+  double t3 = +2.0 * (w * z + x * y);
+  double t4 = +1.0 - 2.0 * (ysqr + z * z);  
+  yaw = atan2(t3, t4);
 }
 

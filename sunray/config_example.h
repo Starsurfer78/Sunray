@@ -115,7 +115,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define FREEWHEEL_IS_AT_BACKSIDE   true   // default Ardumower: true   (change to false, if your freewheel is at frontside) - this is used for obstacle avoidance
 #define WHEEL_BASE_CM         36         // wheel-to-wheel distance (cm)        
 #define WHEEL_DIAMETER        250        // wheel diameter (mm)                 
-// NOTE: MOWER_SIZE removed - use ROBOT_WIDTH for robot dimensions in meters
+#define MOWER_SIZE            60         // mower / chassis size / length in cm
 
 //#define ENABLE_ODOMETRY_ERROR_DETECTION  true    // use this to detect odometry erros
 #define ENABLE_ODOMETRY_ERROR_DETECTION  false
@@ -159,7 +159,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define MOTOR_FAULT_CURRENT 6.0    // gear motors fault current (amps)
 #define MOTOR_TOO_LOW_CURRENT 0.005   // gear motor too low current (amps)
 #define MOTOR_OVERLOAD_CURRENT 1.0    // gear motors overload current (amps)
-#define MOTOR_OVERLOAD_TIMEOUT 20000  // motor overload timeout (ms) - 20 seconds
+
 #define MOTOR_OVERLOAD_SPEED  0.1    // speed (m/s) to use at motor overload
 
 //#define USE_LINEAR_SPEED_RAMP  true      // use a speed ramp for the linear speed
@@ -227,12 +227,6 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define WIFI_IP   192,168,2,15      // choose IP e.g. 192,168,4,1  (comment out for dynamic IP/DHCP) - NOTE: use commans instead of points
 #define WIFI_SSID "myssid"            // choose WiFi network ID
 #define WIFI_PASS "mypassword"      // choose WiFi network password
-
-// --------- SimpleWifiRestart integration (experimental) ---------------------------------
-//#define ENABLE_SIMPLE_WIFI_RESTART false  // enable SimpleWifiRestart for automatic WiFi recovery (default: disabled)
-#define WIFI_RESTART_CHECK_INTERVAL 30000  // WiFi status check interval in ms (default: 30000)
-#define WIFI_RESTART_MAX_FAILURES 3       // max consecutive failures before restart (default: 3)
-#define WIFI_RESTART_DELAY 10000          // delay in ms before restarting WiFi (default: 10000)
 
 // client (app) --->  server (robot)
 #define ENABLE_SERVER true          // must be enabled if robot should act as server (recommended)

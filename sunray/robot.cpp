@@ -742,7 +742,7 @@ void detectSensorMalfunction(){
     }
   }
   if (ENABLE_OVERLOAD_DETECTION){
-    if (motor.motorOverloadDuration > MOTOR_OVERLOAD_TIMEOUT){
+    if (motor.motorOverloadDuration > 20000){
       // one motor is taking too much current over a long time (too high gras etc.) and we should stop mowing
       CONSOLE.println("overload!");    
       activeOp->onMotorOverload();

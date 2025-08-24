@@ -37,26 +37,19 @@ extern "C" {
  */
 String base64::encode(const uint8_t * data, size_t length)
 {
-    if (data == nullptr || length == 0) {
-        return String("-FAIL-");
-    }
-    
     size_t size = base64_encode_expected_len(length) + 1;
     char * buffer = (char *) malloc(size);
-    if(buffer == nullptr) {
-        // Memory allocation failed
-        return String("-FAIL-");
-    }
-    
-    base64_encodestate _state;
-    base64_init_encodestate(&_state);
-    int len = base64_encode_block((const char *) &data[0], length, &buffer[0], &_state);
-    len = base64_encode_blockend((buffer + len), &_state);
+    if(buffer) {
+        base64_encodestate _state;
+        base64_init_encodestate(&_state);
+        int len = base64_encode_block((const char *) &data[0], length, &buffer[0], &_state);
+        len = base64_encode_blockend((buffer + len), &_state);
 
-    String base64 = String(buffer);
-    free(buffer);
-    buffer = nullptr; // Prevent accidental reuse
-    return base64;
+        String base64 = String(buffer);
+        free(buffer);
+        return base64;
+    }
+    return String("-FAIL-");
 }
 
 /**

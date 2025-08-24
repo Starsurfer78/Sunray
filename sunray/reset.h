@@ -14,11 +14,7 @@ enum ResetCause {
 
 ResetCause getResetCause();
 void logResetCause();
-
-// Include new memory monitoring system
-#include "src/memory_monitor.h"
-
-
+int freeMemory();
 
 #ifndef __linux__
   extern "C" char* sbrk(int incr);

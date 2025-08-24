@@ -177,10 +177,10 @@ bool saveState(){
   bool res = true;
 #if defined(ENABLE_SD_RESUME)
   double crc = calcStateCRC();
-  // CONSOLE.print("stateCRC=");
-  // CONSOLE.print(stateCRC);
-  // CONSOLE.print(" crc=");
-  // CONSOLE.println(crc);
+  //CONSOLE.print("stateCRC=");
+  //CONSOLE.print(stateCRC);
+  //CONSOLE.print(" crc=");
+  //CONSOLE.println(crc);
   if (crc == stateCRC) return true;
   stateCRC = crc;
   dumpState();
