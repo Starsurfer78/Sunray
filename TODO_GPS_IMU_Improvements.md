@@ -42,32 +42,48 @@ void enhancedComplementaryFilter(float &roll, float &pitch, float &yaw);
 #### Aufgaben:
 - [ ] Konfigurationsparameter in `config_alfred.h` hinzufügen
 
-- [ ] Antennen-Offset-Korrektur-Funktion implementieren
-- [ ] Integration in GPS-Datenverarbeitung (UBLOX)
-- [ ] 3D-Rotation der Offsets basierend auf aktueller Orientierung
+- [x] Antennen-Offset-Korrektur-Funktion implementieren ✅
+- [x] Integration in GPS-Datenverarbeitung (UBLOX) ✅
+- [x] 3D-Rotation der Offsets basierend auf aktueller Orientierung ✅
+- [x] AT+ Befehle für Konfiguration implementiert ✅
 
-#### Konfiguration:
+#### ✅ IMPLEMENTIERT - Konfiguration:
 ```cpp
-// In config_alfred.h hinzufügen:
+// In config_example.h hinzugefügt:
 
 #define GPS_ANTENNA_OFFSET_X  0.15  // Meter, vorwärts vom Roboterzentrum
 #define GPS_ANTENNA_OFFSET_Y  0.05  // Meter, seitlich vom Roboterzentrum  
 #define GPS_ANTENNA_OFFSET_Z  0.20  // Meter, vertikal vom Roboterzentrum
-#define ENABLE_ANTENNA_OFFSET_CORRECTION  true
+#define ENABLE_ANTENNA_OFFSET_CORRECTION  // Aktiviert die Antennen-Offset-Korrektur
 ```
 
-#### Implementierung:
+#### ✅ IMPLEMENTIERT - Klasse:
 ```cpp
-// Neue Funktion in StateEstimator.cpp:
-void applyAntennaOffset(float &posX, float &posY, float &posZ, 
-                       float roll, float pitch, float yaw) {
-  if (!ENABLE_ANTENNA_OFFSET_CORRECTION) return;
-  
-  // 3D-Rotation der Antennen-Offsets basierend auf aktueller Orientierung
-  float offsetX_rotated = GPS_ANTENNA_OFFSET_X * cos(yaw) * cos(pitch) - 
-                         GPS_ANTENNA_OFFSET_Y * sin(yaw) * cos(roll);
-  float offsetY_rotated = GPS_ANTENNA_OFFSET_X * sin(yaw) * cos(pitch) + 
-                         GPS_ANTENNA_OFFSET_Y * cos(yaw) * cos(roll);
+// Neue Klasse: src/driver/GpsAntennaOffset.h/.cpp
+class GpsAntennaOffset {
+public:
+  void setOffset(float x, float y, float z);
+  void getOffset(float &x, float &y, float &z);
+  void setEnabled(bool enabled);
+  bool isEnabled();
+  void correctPosition(float &posN, float &posE, float &posD, float heading);
+};
+```
+
+#### ✅ IMPLEMENTIERT - Integration:
+```cpp
+// In StateEstimator.cpp integriert:
+#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
+  gpsAntennaOffset.correctPosition(posN, posE, posD, stateDelta);
+#endif
+```
+
+#### ✅ IMPLEMENTIERT - AT+ Befehle:
+```
+AT+GPS_OFFSET,X,Y,Z,enabled    // Setzt GPS-Antennen-Offset
+AT+GPS_OFFSET                  // Zeigt aktuelle Offset-Werte
+AT+GPS_OFFSET_STATUS           // Zeigt Status und Werte
+```
   float offsetZ_rotated = GPS_ANTENNA_OFFSET_Z + 
                          GPS_ANTENNA_OFFSET_X * sin(pitch);
   

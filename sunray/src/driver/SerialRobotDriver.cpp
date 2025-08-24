@@ -229,9 +229,7 @@ void SerialRobotDriver::updateWifiConnectionState(){
       ledStateWifiInactive = (s == "INACTIVE");                   
       
       #ifdef ENABLE_SIMPLE_WIFI_RESTART
-        // Update WiFi restart with current connection status
-        wifiRestart.updateConnectionStatus(ledStateWifiConnected);
-        // Check if WiFi restart is needed
+        // Check if WiFi restart is needed (includes connection status update)
         wifiRestart.checkAndRestart();
       #endif
     }  
@@ -452,7 +450,7 @@ void SerialRobotDriver::processResponse(bool checkCrc){
       cmdResponse = "WIFI_RESTART,OK";
     }
     else if (cmd.startsWith("WIFI_STATUS")) {
-      String status = wifiRestart.isConnected() ? "CONNECTED" : "DISCONNECTED";
+      String status = wifiRestart.isWifiConnected() ? "CONNECTED" : "DISCONNECTED";
       cmdResponse = "WIFI_STATUS," + status + "," + String(wifiRestart.getFailureCount());
     }
     else if (cmd.startsWith("WIFI_CONFIG")) {

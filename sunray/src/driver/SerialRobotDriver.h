@@ -9,6 +9,7 @@
 #define SERIAL_ROBOT_DRIVER_H
 
 #include <Arduino.h>
+#include "../../config.h"
 #include "RobotDriver.h"
 #ifdef ENABLE_SIMPLE_WIFI_RESTART
   #include "../../SimpleWifiRestart.h"
