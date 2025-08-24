@@ -133,6 +133,14 @@ void SerialRobotDriver::begin(){
     }
 
   #endif
+  
+  #ifdef ENABLE_SIMPLE_WIFI_RESTART
+    // Initialize WiFi restart functionality
+    wifiRestart.setCheckInterval(WIFI_CHECK_INTERVAL_MS);
+    wifiRestart.setMaxFailures(WIFI_MAX_FAILURES);
+    wifiRestart.setRestartDelay(WIFI_RESTART_DELAY_MS);
+    CONSOLE.println("WiFi restart functionality enabled");
+  #endif
 }
 
 bool SerialRobotDriver::setLedState(int ledNumber, bool greenState, bool redState){
@@ -219,6 +227,13 @@ void SerialRobotDriver::updateWifiConnectionState(){
       //CONSOLE.println(s);
       ledStateWifiConnected = (s == "COMPLETED");
       ledStateWifiInactive = (s == "INACTIVE");                   
+      
+      #ifdef ENABLE_SIMPLE_WIFI_RESTART
+        // Update WiFi restart with current connection status
+        wifiRestart.updateConnectionStatus(ledStateWifiConnected);
+        // Check if WiFi restart is needed
+        wifiRestart.checkAndRestart();
+      #endif
     }  
     wifiStatusProcess.runShellCommand("wpa_cli -i wlan0 status | grep wpa_state | cut -d '=' -f2");  
     //unsigned long duration = millis() - startTime;        
@@ -429,6 +444,38 @@ void SerialRobotDriver::processResponse(bool checkCrc){
   if (cmd[0] == 'M') motorResponse();
   if (cmd[0] == 'S') summaryResponse();
   if (cmd[0] == 'V') versionResponse();
+  
+  #ifdef ENABLE_SIMPLE_WIFI_RESTART
+    // Handle WiFi AT+ commands
+    if (cmd.startsWith("WIFI_RESTART")) {
+      wifiRestart.forceRestart();
+      cmdResponse = "WIFI_RESTART,OK";
+    }
+    else if (cmd.startsWith("WIFI_STATUS")) {
+      String status = wifiRestart.isConnected() ? "CONNECTED" : "DISCONNECTED";
+      cmdResponse = "WIFI_STATUS," + status + "," + String(wifiRestart.getFailureCount());
+    }
+    else if (cmd.startsWith("WIFI_CONFIG")) {
+      // Parse WIFI_CONFIG,interval,maxFailures,restartDelay
+      int firstComma = cmd.indexOf(',');
+      int secondComma = cmd.indexOf(',', firstComma + 1);
+      int thirdComma = cmd.indexOf(',', secondComma + 1);
+      
+      if (firstComma > 0 && secondComma > 0 && thirdComma > 0) {
+        unsigned long interval = cmd.substring(firstComma + 1, secondComma).toInt();
+        int maxFailures = cmd.substring(secondComma + 1, thirdComma).toInt();
+        unsigned long restartDelay = cmd.substring(thirdComma + 1).toInt();
+        
+        wifiRestart.setCheckInterval(interval);
+        wifiRestart.setMaxFailures(maxFailures);
+        wifiRestart.setRestartDelay(restartDelay);
+        
+        cmdResponse = "WIFI_CONFIG,OK";
+      } else {
+        cmdResponse = "WIFI_CONFIG,ERROR";
+      }
+    }
+  #endif
 }
 
 
