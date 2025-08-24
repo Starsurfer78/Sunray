@@ -1,0 +1,216 @@
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+    </marker>
+    <style>
+      .state-box { fill: #e1f5fe; stroke: #0277bd; stroke-width: 2; }
+      .error-state { fill: #ffebee; stroke: #c62828; }
+      .mow-state { fill: #e8f5e8; stroke: #2e7d32; }
+      .dock-state { fill: #fff3e0; stroke: #ef6c00; }
+      .escape-state { fill: #fce4ec; stroke: #ad1457; }
+      .gps-state { fill: #f3e5f5; stroke: #7b1fa2; }
+      .calib-state { fill: #e0f2f1; stroke: #00695c; }
+      .state-text { font-family: Arial, sans-serif; font-size: 12px; text-anchor: middle; }
+      .transition { stroke: #333; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+      .transition-label { font-family: Arial, sans-serif; font-size: 10px; fill: #666; }
+      .title { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; }
+    </style>
+  </defs>
+  
+  <!-- Title -->
+  <text x="600" y="25" class="title">Sunray Extended State Machine Diagram</text>
+  
+  <!-- Legend -->
+  <g transform="translate(20, 50)">
+    <text x="0" y="0" class="state-text" style="font-weight: bold;">Legend:</text>
+    <rect x="0" y="10" width="15" height="15" class="state-box"/>
+    <text x="20" y="22" class="transition-label">Basic States</text>
+    <rect x="100" y="10" width="15" height="15" class="mow-state"/>
+    <text x="120" y="22" class="transition-label">Mow States</text>
+    <rect x="200" y="10" width="15" height="15" class="dock-state"/>
+    <text x="220" y="22" class="transition-label">Dock States</text>
+    <rect x="300" y="10" width="15" height="15" class="escape-state"/>
+    <text x="320" y="22" class="transition-label">Escape States</text>
+    <rect x="420" y="10" width="15" height="15" class="gps-state"/>
+    <text x="440" y="22" class="transition-label">GPS States</text>
+    <rect x="520" y="10" width="15" height="15" class="calib-state"/>
+    <text x="540" y="22" class="transition-label">Calibration</text>
+    <rect x="640" y="10" width="15" height="15" class="error-state"/>
+    <text x="660" y="22" class="transition-label">Error States</text>
+  </g>
+  
+  <!-- States -->
+  
+  <!-- Basic States -->
+  <rect x="50" y="100" width="80" height="40" class="state-box" rx="5"/>
+  <text x="90" y="125" class="state-text">OP_IDLE</text>
+  
+  <rect x="1050" y="350" width="80" height="40" class="error-state" rx="5"/>
+  <text x="1090" y="375" class="state-text">OP_ERROR</text>
+  
+  <!-- Mow States -->
+  <rect x="250" y="100" width="100" height="40" class="mow-state" rx="5"/>
+  <text x="300" y="125" class="state-text">OP_MOW_UNDOCK</text>
+  
+  <rect x="400" y="100" width="80" height="40" class="mow-state" rx="5"/>
+  <text x="440" y="125" class="state-text">OP_MOW</text>
+  
+  <!-- Dock States -->
+  <rect x="600" y="100" width="80" height="40" class="dock-state" rx="5"/>
+  <text x="640" y="125" class="state-text">OP_DOCK</text>
+  
+  <rect x="750" y="100" width="100" height="40" class="dock-state" rx="5"/>
+  <text x="800" y="125" class="state-text">OP_DOCK_APPROACH</text>
+  
+  <rect x="900" y="100" width="80" height="40" class="dock-state" rx="5"/>
+  <text x="940" y="125" class="state-text">OP_CHARGE</text>
+  
+  <!-- Escape States -->
+  <rect x="200" y="250" width="120" height="40" class="escape-state" rx="5"/>
+  <text x="260" y="275" class="state-text">OP_ESCAPE_REVERSE</text>
+  
+  <rect x="350" y="250" width="120" height="40" class="escape-state" rx="5"/>
+  <text x="410" y="275" class="state-text">OP_ESCAPE_FORWARD</text>
+  
+  <rect x="500" y="250" width="130" height="40" class="escape-state" rx="5"/>
+  <text x="565" y="275" class="state-text">OP_ESCAPE_ROTATION</text>
+  
+  <!-- GPS States -->
+  <rect x="200" y="400" width="110" height="40" class="gps-state" rx="5"/>
+  <text x="255" y="425" class="state-text">OP_GPS_WAIT_FIX</text>
+  
+  <rect x="350" y="400" width="120" height="40" class="gps-state" rx="5"/>
+  <text x="410" y="425" class="state-text">OP_GPS_WAIT_FLOAT</text>
+  
+  <rect x="500" y="400" width="110" height="40" class="gps-state" rx="5"/>
+  <text x="555" y="425" class="state-text">OP_GPS_RECOVERY</text>
+  
+  <!-- Calibration States -->
+  <rect x="200" y="550" width="130" height="40" class="calib-state" rx="5"/>
+  <text x="265" y="575" class="state-text">OP_IMU_CALIBRATION</text>
+  
+  <rect x="350" y="550" width="120" height="40" class="calib-state" rx="5"/>
+  <text x="410" y="575" class="state-text">OP_RELOCALIZATION</text>
+  
+  <rect x="500" y="550" width="110" height="40" class="calib-state" rx="5"/>
+  <text x="555" y="575" class="state-text">OP_KIDNAP_WAIT</text>
+  
+  <!-- Main Flow Transitions -->
+  
+  <!-- IDLE to MOW_UNDOCK -->
+  <line x1="130" y1="120" x2="250" y2="120" class="transition"/>
+  <text x="190" y="115" class="transition-label">Start Mowing</text>
+  
+  <!-- MOW_UNDOCK to MOW -->
+  <line x1="350" y1="120" x2="400" y2="120" class="transition"/>
+  <text x="375" y="115" class="transition-label">Undocked</text>
+  
+  <!-- MOW to DOCK -->
+  <line x1="480" y1="120" x2="600" y2="120" class="transition"/>
+  <text x="540" y="115" class="transition-label">Battery Low</text>
+  
+  <!-- DOCK to DOCK_APPROACH -->
+  <line x1="680" y1="120" x2="750" y2="120" class="transition"/>
+  <text x="715" y="115" class="transition-label">Near Dock</text>
+  
+  <!-- DOCK_APPROACH to CHARGE -->
+  <line x1="850" y1="120" x2="900" y2="120" class="transition"/>
+  <text x="875" y="115" class="transition-label">Docked</text>
+  
+  <!-- CHARGE to IDLE -->
+  <path d="M 940 100 Q 940 50 90 50 Q 90 80 90 100" class="transition"/>
+  <text x="500" y="45" class="transition-label">Charging Complete</text>
+  
+  <!-- Escape Transitions -->
+  
+  <!-- MOW to ESCAPE_REVERSE -->
+  <line x1="440" y1="140" x2="260" y2="250" class="transition"/>
+  <text x="330" y="200" class="transition-label">Obstacle</text>
+  
+  <!-- ESCAPE_REVERSE to ESCAPE_FORWARD -->
+  <line x1="320" y1="270" x2="350" y2="270" class="transition"/>
+  <text x="335" y="285" class="transition-label">Reverse Done</text>
+  
+  <!-- ESCAPE_FORWARD to ESCAPE_ROTATION -->
+  <line x1="470" y1="270" x2="500" y2="270" class="transition"/>
+  <text x="485" y="285" class="transition-label">Forward Done</text>
+  
+  <!-- ESCAPE_ROTATION back to MOW -->
+  <path d="M 565 250 Q 565 200 440 200 Q 440 140 440 140" class="transition"/>
+  <text x="500" y="195" class="transition-label">Rotation Done</text>
+  
+  <!-- GPS Recovery Transitions -->
+  
+  <!-- MOW to GPS_WAIT_FIX -->
+  <line x1="440" y1="140" x2="255" y2="400" class="transition"/>
+  <text x="320" y="280" class="transition-label">GPS Lost</text>
+  
+  <!-- GPS_WAIT_FIX to GPS_WAIT_FLOAT -->
+  <line x1="310" y1="420" x2="350" y2="420" class="transition"/>
+  <text x="330" y="435" class="transition-label">Timeout</text>
+  
+  <!-- GPS_WAIT_FLOAT to GPS_RECOVERY -->
+  <line x1="470" y1="420" x2="500" y2="420" class="transition"/>
+  <text x="485" y="435" class="transition-label">Reboot GPS</text>
+  
+  <!-- GPS_RECOVERY back to MOW -->
+  <path d="M 555 400 Q 555 350 440 350 Q 440 140 440 140" class="transition"/>
+  <text x="500" y="345" class="transition-label">GPS Fixed</text>
+  
+  <!-- Calibration Transitions -->
+  
+  <!-- IDLE to IMU_CALIBRATION -->
+  <line x1="90" y1="140" x2="265" y2="550" class="transition"/>
+  <text x="150" y="350" class="transition-label">IMU Cal Needed</text>
+  
+  <!-- IMU_CALIBRATION to RELOCALIZATION -->
+  <line x1="330" y1="570" x2="350" y2="570" class="transition"/>
+  <text x="340" y="585" class="transition-label">Cal Done</text>
+  
+  <!-- RELOCALIZATION to MOW -->
+  <path d="M 410 550 Q 410 500 440 500 Q 440 140 440 140" class="transition"/>
+  <text x="425" y="495" class="transition-label">Relocalized</text>
+  
+  <!-- KIDNAP_WAIT back to previous state -->
+  <path d="M 555 550 Q 555 500 440 500 Q 440 140 440 140" class="transition"/>
+  <text x="500" y="495" class="transition-label">Kidnap Resolved</text>
+  
+  <!-- Error Transitions (from any state) -->
+  
+  <!-- MOW to ERROR -->
+  <line x1="480" y1="120" x2="1050" y2="370" class="transition" stroke="red"/>
+  <text x="750" y="250" class="transition-label" fill="red">Critical Error</text>
+  
+  <!-- ERROR to IDLE -->
+  <path d="M 1090 350 Q 1090 300 90 300 Q 90 140 90 140" class="transition" stroke="red"/>
+  <text x="600" y="295" class="transition-label" fill="red">Error Resolved</text>
+  
+  <!-- Emergency Stop (from any state to IDLE) -->
+  <path d="M 600 200 Q 600 180 90 180 Q 90 140 90 140" class="transition" stroke="orange" stroke-dasharray="5,5"/>
+  <text x="350" y="175" class="transition-label" fill="orange">Emergency Stop</text>
+  
+  <!-- State Descriptions -->
+  <g transform="translate(50, 650)">
+    <text x="0" y="0" class="state-text" style="font-weight: bold;">State Descriptions:</text>
+    <text x="0" y="20" class="transition-label">• OP_IDLE: Robot in standby mode</text>
+    <text x="0" y="35" class="transition-label">• OP_MOW_UNDOCK: Leaving charging station to start mowing</text>
+    <text x="0" y="50" class="transition-label">• OP_MOW: Normal mowing operation</text>
+    <text x="0" y="65" class="transition-label">• OP_DOCK: Navigating to charging station</text>
+    <text x="0" y="80" class="transition-label">• OP_DOCK_APPROACH: Final approach and docking procedure</text>
+    <text x="0" y="95" class="transition-label">• OP_CHARGE: Charging battery at station</text>
+    
+    <text x="400" y="20" class="transition-label">• OP_ESCAPE_REVERSE: Backing away from obstacle</text>
+    <text x="400" y="35" class="transition-label">• OP_ESCAPE_FORWARD: Moving forward after obstacle</text>
+    <text x="400" y="50" class="transition-label">• OP_ESCAPE_ROTATION: Rotating to avoid obstacle</text>
+    <text x="400" y="65" class="transition-label">• OP_GPS_WAIT_FIX: Waiting for GPS fix signal</text>
+    <text x="400" y="80" class="transition-label">• OP_GPS_WAIT_FLOAT: Waiting for GPS float signal</text>
+    <text x="400" y="95" class="transition-label">• OP_GPS_RECOVERY: Recovering from GPS failure</text>
+    
+    <text x="800" y="20" class="transition-label">• OP_IMU_CALIBRATION: Calibrating IMU sensor</text>
+    <text x="800" y="35" class="transition-label">• OP_RELOCALIZATION: Re-establishing position</text>
+    <text x="800" y="50" class="transition-label">• OP_KIDNAP_WAIT: Waiting after kidnap detection</text>
+    <text x="800" y="65" class="transition-label">• OP_ERROR: Critical error state</text>
+  </g>
+  
+</svg>

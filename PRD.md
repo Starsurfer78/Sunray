@@ -11,7 +11,8 @@
 * **Arduino Due ist Zielplattform.** Alle Builds und Tests erfolgen für den **Arduino Due**.
 * **Alfred-Code läuft auf Raspberry Pi.** Refactorings am Sunray-Arduino-Teil dürfen die Kompatibilität mit dem Raspberry-Pi-Code (Alfred) **nicht beeinträchtigen**.
 * **Kommunikation Alfred ↔ STM:** Die Kommunikation über **AT+ Befehle** muss vollständig kompatibel bleiben. Erweiterungen sind erlaubt, aber **bestehende Befehle dürfen nicht entfernt oder verändert** werden.
-
+* **Wenn die config.h geändert wird, muss auch immer die config_alfred.h geändert werden.**
+* **Wenn die config_alfred.h geändert wird, muss auch immer die config.h geändert werden.**
 ---
 
 ## 2) Refactor-Ziele & Prioritäten

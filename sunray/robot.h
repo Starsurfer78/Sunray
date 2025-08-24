@@ -43,11 +43,22 @@
 
 // operation types
 enum OperationType {
-      OP_IDLE,      // idle
-      OP_MOW,       // mowing
-      OP_CHARGE,    // charging
-      OP_ERROR,     // serious error
-      OP_DOCK,      // go to docking
+      // Basis-Zustände (0-4: Rückwärtskompatibilität)
+      OP_IDLE,                    // 0: Ruhezustand
+      OP_MOW,                     // 1: Normales Mähen
+      OP_CHARGE,                  // 2: Ladevorgang
+      OP_ERROR,                   // 3: Fehlerzustand
+      OP_DOCK,                    // 4: Fahrt zur Ladestation
+      
+      // Erweiterte granulare Zustände (5+: neue Funktionalität)
+      OP_ESCAPE_REVERSE,          // 5: Rückwärts-Hindernisvermeidung
+      OP_ESCAPE_FORWARD,          // 6: Vorwärts-Hindernisvermeidung
+      OP_GPS_WAIT_FIX,           // 7: Warten auf GPS-Fix
+      OP_GPS_WAIT_FLOAT,         // 8: Warten auf GPS-Float
+      OP_GPS_RECOVERY,           // 9: GPS-Recovery nach Neustart
+      OP_IMU_CALIBRATION,        // 10: IMU-Kalibrierung
+      OP_RELOCALIZATION,         // 11: Neupositionierung
+      OP_KIDNAP_WAIT,            // 12: Warten nach Kidnapping
 };    
 
 // sensor errors
