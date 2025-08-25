@@ -168,6 +168,57 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define MOTOR_LEFT_SWAP_DIRECTION 1  // uncomment to swap left motor direction
 #define MOTOR_RIGHT_SWAP_DIRECTION 1  // uncomment to swap right motor direction
 
+// ----- motor control magic numbers (refactoring constants) -----
+// PID control timing and filtering constants
+#define MOTOR_PID_TA_MAX              0.1     // maximum cycle time for PID controller (seconds)
+#define MOTOR_CONTROL_INTERVAL_MS     50      // motor control loop interval (milliseconds)
+#define MOTOR_SENSE_INTERVAL_MS       20      // motor current sensing interval (milliseconds)
+
+// Low-pass filter coefficients for motor control
+#define MOTOR_CURRENT_LPF_COEFF       0.995   // low-pass filter coefficient for current sensing (0.995)
+#define MOTOR_CURRENT_LPF_COEFF_ALT   0.99    // alternative low-pass filter coefficient (0.99)
+#define MOTOR_PWM_LPF_COEFF           0.99    // low-pass filter coefficient for PWM values
+#define MOTOR_MOW_PWM_LPF_COEFF       0.99    // low-pass filter coefficient for mow motor PWM
+#define MOTOR_UNITY_GAIN              1.0     // unity gain constant for calculations
+#define MOTOR_PITCH_FACTOR_MAX        2.0     // maximum pitch factor for normalized current
+
+// Motor PWM and RPM thresholds
+#define MOTOR_PWM_ZERO_THRESHOLD      30      // PWM threshold below which motor is considered stopped
+#define MOTOR_RPM_ZERO_THRESHOLD      0.01   // RPM threshold below which motor is considered stopped
+#define MOTOR_MOW_PWM_RAMP_COEFF      0.01   // mow motor PWM ramping coefficient
+
+// Error detection thresholds
+#define MOTOR_ODOMETRY_PWM_THRESHOLD  100     // PWM threshold for odometry error detection
+#define MOTOR_ODOMETRY_RPM_THRESHOLD  0.001  // RPM threshold for odometry error detection
+#define MOTOR_MOW_RPM_FAULT_THRESHOLD 10.0   // mow motor RPM threshold for fault detection
+#define MOTOR_OVERLOAD_DURATION_STEP  20     // motor overload duration increment (milliseconds)
+#define MOTOR_FAULT_RECOVERY_TIMEOUT  1000   // motor fault recovery timeout (milliseconds)
+#define MOTOR_FAULT_RECOVERY_LONG     10000  // long motor fault recovery timeout (milliseconds)
+#define MOTOR_MAX_SUCCESSIVE_FAULTS   10     // maximum successive motor faults before error
+#define MOTOR_TICKS_ZERO_THRESHOLD    2      // encoder ticks threshold for zero detection
+#define MOTOR_CURRENT_TOO_LOW_PWM     100    // PWM threshold for current too low error detection
+
+// Test and calibration constants
+#define MOTOR_TEST_INITIAL_PWM        200    // initial PWM value for motor test
+#define MOTOR_TEST_SLOWDOWN_PWM       20     // slow PWM value for motor test slowdown
+#define MOTOR_TEST_REVOLUTIONS        10     // number of revolutions for motor test
+#define MOTOR_TEST_INFO_INTERVAL      1000   // info display interval for motor test (milliseconds)
+
+// Motor plot and debug constants
+#define MOTOR_PLOT_DURATION_MS        60000  // motor plot duration (milliseconds)
+#define MOTOR_PLOT_INTERVAL_MS        100    // motor plot data interval (milliseconds)
+#define MOTOR_PLOT_OFFSET             300    // PWM offset for plotting
+#define MOTOR_MAX_PWM                 255    // maximum PWM value for plotting
+#define MOTOR_PLOT_ACCEL_SLOW         1      // slow acceleration for motor plot
+#define MOTOR_PLOT_ACCEL_FAST         20     // fast acceleration for motor plot
+#define MOTOR_PLOT_DELAY_MS           5000   // delay before starting motor plot (milliseconds)
+
+// Mathematical constants
+#define MOTOR_PI_APPROX               3.1415 // approximation of PI for calculations
+#define MOTOR_CM_TO_M_FACTOR          100.0  // conversion factor from cm to meters
+#define MOTOR_MS_TO_S_FACTOR          1000.0 // conversion factor from milliseconds to seconds
+#define MOTOR_DEFAULT_HEIGHT_MM       50     // default mowing height in millimeters
+#define MOTOR_MOW_TICKS_PER_REV       6.0    // mowing motor ticks per revolution
 
 // ----- mowing motor -------------------------------------------------
 // NOTE: motor drivers will indicate 'fault' signal if motor current (e.g. due to a stall on a molehole) or temperature is too high for a 

@@ -674,6 +674,8 @@ void Map::clearMap(){
   freePoints.dealloc();
   obstacles.dealloc();
   pathFinderObstacles.dealloc();
+  pathFinderPerimeter.dealloc();
+  pathFinderExclusions.dealloc();
   pathFinderNodes.dealloc();
 }
 
