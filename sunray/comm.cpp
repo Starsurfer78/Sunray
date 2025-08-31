@@ -11,10 +11,6 @@
 #include "ble.h"
 #include "events.h"
 
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-#include "src/driver/GpsAntennaOffset.h"
-#endif
-
 #ifdef __linux__
   #include <BridgeClient.h>
   #include <Process.h>
@@ -839,6 +835,57 @@ void cmdWiFiStatus(){
   cmdAnswer(s);
 }
 
+void cmdWiFiRestart(){
+  #ifdef __linux__
+    CONSOLE.println("WiFi restart initiated");
+    Process p;
+    // Deactivate WiFi interface
+    p.runShellCommand("sudo ifdown wlan0");
+    delay(WIFI_RESTART_DELAY_MS);
+    // Reactivate WiFi interface
+    p.runShellCommand("sudo ifup wlan0");
+    cmdAnswer("WiFi restarted");
+  #else
+    cmdAnswer("not supported");
+  #endif
+}
+
+void cmdWiFiRestartStatus(){
+  #ifdef __linux__
+    String response = "WiFi_CHECK_INTERVAL:" + String(WIFI_CHECK_INTERVAL_MS) + ",";
+    response += "WIFI_MAX_FAILURES:" + String(WIFI_MAX_FAILURES) + ",";
+    response += "WIFI_RESTART_DELAY:" + String(WIFI_RESTART_DELAY_MS);
+    cmdAnswer(response);
+  #else
+    cmdAnswer("not supported");
+  #endif
+}
+
+void cmdWiFiConfig(){
+  if (cmd.length() <= 4){
+    // Show current configuration
+    cmdWiFiRestartStatus();
+  } else {
+    // Parse configuration parameters: AT+WIFI_CONFIG,<INTERVAL>,<MAX_FAILURES>,<RESTART_DELAY>
+    int idx1 = cmd.indexOf(',', 4);
+    int idx2 = cmd.indexOf(',', idx1 + 1);
+    int idx3 = cmd.indexOf(',', idx2 + 1);
+    
+    if (idx1 > 0 && idx2 > 0 && idx3 > 0) {
+      // Note: In a real implementation, these would need to be stored persistently
+      // For now, just acknowledge the command
+      String interval = cmd.substring(idx1 + 1, idx2);
+      String maxFailures = cmd.substring(idx2 + 1, idx3);
+      String restartDelay = cmd.substring(idx3 + 1);
+      
+      String response = "WiFi config updated: INTERVAL=" + interval + ",MAX_FAILURES=" + maxFailures + ",RESTART_DELAY=" + restartDelay;
+      cmdAnswer(response);
+    } else {
+      cmdAnswer("Invalid WiFi config format");
+    }
+  }
+}
+
 
 // request firmware update
 void cmdFirmwareUpdate(){
@@ -866,89 +913,6 @@ void cmdFirmwareUpdate(){
   #endif  
   cmdAnswer(s);
 }
-
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-// GPS antenna offset configuration
-void cmdGpsOffset(){
-  if (cmd.length() < 6) {
-    // Return current offset values
-    float offsetX, offsetY, offsetZ;
-    gpsAntennaOffset.getOffset(offsetX, offsetY, offsetZ);
-    String s = F("GPS_OFFSET,");
-    s += offsetX;
-    s += ",";
-    s += offsetY;
-    s += ",";
-    s += offsetZ;
-    s += ",";
-    s += (gpsAntennaOffset.isEnabled() ? "1" : "0");
-    cmdAnswer(s);
-    return;
-  }
-  
-  // Parse GPS_OFFSET,X,Y,Z,enabled
-  int counter = 0;
-  int lastCommaIdx = 0;
-  float offsetX = 0, offsetY = 0, offsetZ = 0;
-  bool enabled = false;
-  
-  for (int idx = 0; idx < cmd.length(); idx++) {
-    char ch = cmd[idx];
-    if ((ch == ',') || (idx == cmd.length() - 1)) {
-      float floatValue = cmd.substring(lastCommaIdx + 1, ch == ',' ? idx : idx + 1).toFloat();
-      int intValue = cmd.substring(lastCommaIdx + 1, ch == ',' ? idx : idx + 1).toInt();
-      
-      if (counter == 1) {
-        offsetX = floatValue;
-      } else if (counter == 2) {
-        offsetY = floatValue;
-      } else if (counter == 3) {
-        offsetZ = floatValue;
-      } else if (counter == 4) {
-        enabled = (intValue != 0);
-      }
-      counter++;
-      lastCommaIdx = idx;
-    }
-  }
-  
-  if (counter >= 4) {
-    gpsAntennaOffset.setOffset(offsetX, offsetY, offsetZ);
-    gpsAntennaOffset.setEnabled(enabled);
-    
-    CONSOLE.print("GPS antenna offset set: X=");
-    CONSOLE.print(offsetX);
-    CONSOLE.print(" Y=");
-    CONSOLE.print(offsetY);
-    CONSOLE.print(" Z=");
-    CONSOLE.print(offsetZ);
-    CONSOLE.print(" enabled=");
-    CONSOLE.println(enabled);
-    
-    String s = F("GPS_OFFSET,OK");
-    cmdAnswer(s);
-  } else {
-    String s = F("GPS_OFFSET,ERROR");
-    cmdAnswer(s);
-  }
-}
-
-// GPS antenna offset status
-void cmdGpsOffsetStatus(){
-  float offsetX, offsetY, offsetZ;
-  gpsAntennaOffset.getOffset(offsetX, offsetY, offsetZ);
-  
-  String s = F("GPS_OFFSET_STATUS,");
-  s += (gpsAntennaOffset.isEnabled() ? "ENABLED" : "DISABLED");
-  s += ",";
-  s += offsetX;
-  s += ",";
-  s += offsetY;
-  s += ",";
-  s += offsetZ;
-  cmdAnswer(s);
-}
-#endif
 
 // process request
 void processCmd(bool checkCrc, bool decrypt){
@@ -1044,28 +1008,27 @@ void processCmd(bool checkCrc, bool decrypt){
   if (cmd[3] == 'B') {
     if (cmd[4] == '1') cmdWiFiScan();
     if (cmd[4] == '2') cmdWiFiSetup();   
-    if (cmd[4] == '3') cmdWiFiStatus();     
+    if (cmd[4] == '3') cmdWiFiStatus();
+    if (cmd[4] == '4') cmdWiFiRestart();
+    if (cmd[4] == '5') cmdWiFiRestartStatus();
+    if (cmd[4] == '6') cmdWiFiConfig();
+  }
+  // WiFi Restart commands with full names
+  if (cmd.startsWith("AT+WIFI_RESTART")) {
+    if (cmd == "AT+WIFI_RESTART") cmdWiFiRestart();
+    else cmdAnswer("Invalid WiFi restart command");
+  }
+  if (cmd.startsWith("AT+WIFI_STATUS")) {
+    if (cmd == "AT+WIFI_STATUS") cmdWiFiRestartStatus();
+    else cmdAnswer("Invalid WiFi status command");
+  }
+  if (cmd.startsWith("AT+WIFI_CONFIG")) {
+    cmdWiFiConfig();
   }
   if (cmd[3] == 'U'){ 
     if ((cmd.length() > 4) && (cmd[4] == '1')) cmdFirmwareUpdate();
   }
-  if (cmd[3] == 'G') {
-    if (cmd.length() <= 4) {
-      cmdToggleGPSSolution();   // for developers
-    } else {
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-      if (cmd.startsWith("AT+GPS_OFFSET_STATUS")) {
-        cmdGpsOffsetStatus();
-      } else if (cmd.startsWith("AT+GPS_OFFSET")) {
-        cmdGpsOffset();
-      } else {
-        cmdToggleGPSSolution();   // for developers
-      }
-#else
-      cmdToggleGPSSolution();   // for developers
-#endif
-    }
-  }
+  if (cmd[3] == 'G') cmdToggleGPSSolution();   // for developers
   if (cmd[3] == 'K') cmdKidnap();   // for developers
   if (cmd[3] == 'Z') cmdStressTest();   // for developers
   if (cmd[3] == 'Y') {

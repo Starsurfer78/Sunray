@@ -73,11 +73,15 @@ void Op::changeOperationTypeByOperator(OperationType op){
     return;
   }  
   switch (op){
-    // Basis-Zustände (Rückwärtskompatibilität)
     case OP_IDLE:      
       Logger.event(EVT_USER_STOP);
       activeOp->changeOp(idleOp, false);
       idleOp.setInitiatedByOperator(true);
+      break;
+    case OP_DOCK:
+      Logger.event(EVT_USER_DOCK);
+      activeOp->changeOp(dockOp, false);
+      dockOp.setInitiatedByOperator(true);
       break;
     case OP_MOW:      
       Logger.event(EVT_USER_START);
@@ -93,68 +97,17 @@ void Op::changeOperationTypeByOperator(OperationType op){
       activeOp->changeOp(errorOp, false);
       errorOp.setInitiatedByOperator(true);
       break;
-    case OP_DOCK:
-      Logger.event(EVT_USER_DOCK);
-      activeOp->changeOp(dockOp, false);
-      dockOp.setInitiatedByOperator(true);
-      break;
-      
-    // Erweiterte granulare Zustände (neue AT+ Befehle)
-    case OP_ESCAPE_REVERSE:
-      activeOp->changeOp(escapeReverseOp, false);
-      escapeReverseOp.setInitiatedByOperator(true);
-      break;
-    case OP_ESCAPE_FORWARD:
-      activeOp->changeOp(escapeForwardOp, false);
-      escapeForwardOp.setInitiatedByOperator(true);
-      break;
-    case OP_GPS_WAIT_FIX:
-      activeOp->changeOp(gpsWaitFixOp, false);
-      gpsWaitFixOp.setInitiatedByOperator(true);
-      break;
-    case OP_GPS_WAIT_FLOAT:
-      activeOp->changeOp(gpsWaitFloatOp, false);
-      gpsWaitFloatOp.setInitiatedByOperator(true);
-      break;
-    case OP_GPS_RECOVERY:
-      activeOp->changeOp(gpsRebootRecoveryOp, false);
-      gpsRebootRecoveryOp.setInitiatedByOperator(true);
-      break;
-    case OP_IMU_CALIBRATION:
-      activeOp->changeOp(imuCalibrationOp, false);
-      imuCalibrationOp.setInitiatedByOperator(true);
-      break;
-    case OP_RELOCALIZATION:
-      activeOp->changeOp(relocalizationOp, false);
-      relocalizationOp.setInitiatedByOperator(true);
-      break;
-    case OP_KIDNAP_WAIT:
-      activeOp->changeOp(kidnapWaitOp, false);
-      kidnapWaitOp.setInitiatedByOperator(true);
-      break;
   }
 }
 
 
 OperationType Op::getGoalOperationType(){
     Op *goalOp = getGoalOp();
-    // Basis-Zustände (Rückwärtskompatibilität)
     if (goalOp == &idleOp) return OP_IDLE;
+    if (goalOp == &dockOp) return OP_DOCK;
     if (goalOp == &mowOp) return OP_MOW;
     if (goalOp == &chargeOp) return OP_CHARGE;
     if (goalOp == &errorOp) return OP_ERROR;
-    if (goalOp == &dockOp) return OP_DOCK;
-    
-    // Erweiterte granulare Zustände
-    if (goalOp == &escapeReverseOp) return OP_ESCAPE_REVERSE;
-    if (goalOp == &escapeForwardOp) return OP_ESCAPE_FORWARD;
-    if (goalOp == &gpsWaitFixOp) return OP_GPS_WAIT_FIX;
-    if (goalOp == &gpsWaitFloatOp) return OP_GPS_WAIT_FLOAT;
-    if (goalOp == &gpsRebootRecoveryOp) return OP_GPS_RECOVERY;
-    if (goalOp == &imuCalibrationOp) return OP_IMU_CALIBRATION;
-    if (goalOp == &relocalizationOp) return OP_RELOCALIZATION;
-    if (goalOp == &kidnapWaitOp) return OP_KIDNAP_WAIT;
-    
     CONSOLE.println("ERROR: Op::getGoalOperationType: invalid goal op!");
     return OP_ERROR;
 }

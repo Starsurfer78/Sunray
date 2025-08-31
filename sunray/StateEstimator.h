@@ -9,7 +9,6 @@
 
 
 #include <Arduino.h>
-#include "src/driver/GpsAntennaOffset.h"
 
 // localization modes
 enum LocalizationMode {
@@ -58,11 +57,7 @@ extern bool gpsJump;
 
 extern bool imuIsCalibrating;
 extern unsigned long imuDataTimeout;
-extern float lastIMUYaw;
-
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-extern GpsAntennaOffset gpsAntennaOffset;
-#endif 
+extern float lastIMUYaw; 
 
 
 bool startIMU(bool forceIMU);

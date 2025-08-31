@@ -17,7 +17,7 @@ String EscapeReverseOp::name(){
 
 void EscapeReverseOp::begin(){
     // obstacle avoidance
-    driveReverseStopTime = millis() + 3000;                           
+    driveReverseStopTime = millis() + 1500;                           
 }
 
 

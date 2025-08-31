@@ -73,7 +73,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define MPU_ADDR 0x69  // I2C address (0x68 if AD0=LOW, 0x69 if AD0=HIGH)
 
 // imu fifo rate (Hz)
-#define IMU_FIFO_RATE 5
+#define IMU_FIFO_RATE 30
 
 // should the mower turn off if IMU is tilt over? (yes: uncomment line, no: comment line)
 #define ENABLE_TILT_DETECTION  1
@@ -112,7 +112,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define FREEWHEEL_IS_AT_BACKSIDE   false   // default Ardumower: true   (change to false, if your freewheel is at frontside) - this is used for obstacle avoidance
 #define WHEEL_BASE_CM         39         // wheel-to-wheel distance (cm)        
 #define WHEEL_DIAMETER        205        // wheel diameter (mm)                 
-#define MOWER_SIZE            60         // mower / chassis size / length in cm
+#define MOWER_SIZE            64         // mower / chassis size / length in cm
 
 //#define ENABLE_ODOMETRY_ERROR_DETECTION  true    // use this to detect odometry erros
 #define ENABLE_ODOMETRY_ERROR_DETECTION  false
@@ -168,57 +168,6 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define MOTOR_LEFT_SWAP_DIRECTION 1  // uncomment to swap left motor direction
 #define MOTOR_RIGHT_SWAP_DIRECTION 1  // uncomment to swap right motor direction
 
-// ----- motor control magic numbers (refactoring constants) -----
-// PID control timing and filtering constants
-#define MOTOR_PID_TA_MAX              0.1     // maximum cycle time for PID controller (seconds)
-#define MOTOR_CONTROL_INTERVAL_MS     50      // motor control loop interval (milliseconds)
-#define MOTOR_SENSE_INTERVAL_MS       20      // motor current sensing interval (milliseconds)
-
-// Low-pass filter coefficients for motor control
-#define MOTOR_CURRENT_LPF_COEFF       0.995   // low-pass filter coefficient for current sensing (0.995)
-#define MOTOR_CURRENT_LPF_COEFF_ALT   0.99    // alternative low-pass filter coefficient (0.99)
-#define MOTOR_PWM_LPF_COEFF           0.99    // low-pass filter coefficient for PWM values
-#define MOTOR_MOW_PWM_LPF_COEFF       0.99    // low-pass filter coefficient for mow motor PWM
-#define MOTOR_UNITY_GAIN              1.0     // unity gain constant for calculations
-#define MOTOR_PITCH_FACTOR_MAX        2.0     // maximum pitch factor for normalized current
-
-// Motor PWM and RPM thresholds
-#define MOTOR_PWM_ZERO_THRESHOLD      30      // PWM threshold below which motor is considered stopped
-#define MOTOR_RPM_ZERO_THRESHOLD      0.01   // RPM threshold below which motor is considered stopped
-#define MOTOR_MOW_PWM_RAMP_COEFF      0.01   // mow motor PWM ramping coefficient
-
-// Error detection thresholds
-#define MOTOR_ODOMETRY_PWM_THRESHOLD  100     // PWM threshold for odometry error detection
-#define MOTOR_ODOMETRY_RPM_THRESHOLD  0.001  // RPM threshold for odometry error detection
-#define MOTOR_MOW_RPM_FAULT_THRESHOLD 10.0   // mow motor RPM threshold for fault detection
-#define MOTOR_OVERLOAD_DURATION_STEP  20     // motor overload duration increment (milliseconds)
-#define MOTOR_FAULT_RECOVERY_TIMEOUT  1000   // motor fault recovery timeout (milliseconds)
-#define MOTOR_FAULT_RECOVERY_LONG     10000  // long motor fault recovery timeout (milliseconds)
-#define MOTOR_MAX_SUCCESSIVE_FAULTS   10     // maximum successive motor faults before error
-#define MOTOR_TICKS_ZERO_THRESHOLD    2      // encoder ticks threshold for zero detection
-#define MOTOR_CURRENT_TOO_LOW_PWM     100    // PWM threshold for current too low error detection
-
-// Test and calibration constants
-#define MOTOR_TEST_INITIAL_PWM        200    // initial PWM value for motor test
-#define MOTOR_TEST_SLOWDOWN_PWM       20     // slow PWM value for motor test slowdown
-#define MOTOR_TEST_REVOLUTIONS        10     // number of revolutions for motor test
-#define MOTOR_TEST_INFO_INTERVAL      1000   // info display interval for motor test (milliseconds)
-
-// Motor plot and debug constants
-#define MOTOR_PLOT_DURATION_MS        60000  // motor plot duration (milliseconds)
-#define MOTOR_PLOT_INTERVAL_MS        100    // motor plot data interval (milliseconds)
-#define MOTOR_PLOT_OFFSET             300    // PWM offset for plotting
-#define MOTOR_MAX_PWM                 255    // maximum PWM value for plotting
-#define MOTOR_PLOT_ACCEL_SLOW         1      // slow acceleration for motor plot
-#define MOTOR_PLOT_ACCEL_FAST         20     // fast acceleration for motor plot
-#define MOTOR_PLOT_DELAY_MS           5000   // delay before starting motor plot (milliseconds)
-
-// Mathematical constants
-#define MOTOR_PI_APPROX               3.1415 // approximation of PI for calculations
-#define MOTOR_CM_TO_M_FACTOR          100.0  // conversion factor from cm to meters
-#define MOTOR_MS_TO_S_FACTOR          1000.0 // conversion factor from milliseconds to seconds
-#define MOTOR_DEFAULT_HEIGHT_MM       50     // default mowing height in millimeters
-#define MOTOR_MOW_TICKS_PER_REV       6.0    // mowing motor ticks per revolution
 
 // ----- mowing motor -------------------------------------------------
 // NOTE: motor drivers will indicate 'fault' signal if motor current (e.g. due to a stall on a molehole) or temperature is too high for a 
@@ -271,12 +220,10 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define WIFI_SSID "ssid"            // choose WiFi network ID
 #define WIFI_PASS "pass"      // choose WiFi network password
 
-// ------ WiFi automatic restart configuration (experimental) ----------------
-// automatic WiFi reconnection if connection is lost
-#define ENABLE_SIMPLE_WIFI_RESTART  true    // enable automatic WiFi restart? (uncomment to activate)
-#define WIFI_CHECK_INTERVAL_MS      7000     // WiFi status check interval (ms)
-#define WIFI_MAX_FAILURES           3        // max consecutive WiFi failures before restart
-#define WIFI_RESTART_DELAY_MS       5000     // delay after WiFi restart (ms)
+// ------ WiFi Restart functionality (Linux only) ----------------------
+#define WIFI_CHECK_INTERVAL_MS 30000     // WiFi connection check interval (30 seconds)
+#define WIFI_MAX_FAILURES 3              // Max consecutive WiFi failures before restart
+#define WIFI_RESTART_DELAY_MS 5000       // Delay after WiFi restart (5 seconds)
 
 // client (app) --->  server (robot)
 #define ENABLE_SERVER true          // must be enabled if robot should act as server (recommended)
@@ -346,9 +293,9 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define BUMPER_ENABLE true
 //#define BUMPER_ENABLE false
 #define BUMPER_INVERT false       // invert bumper sensor state? 
-#define BUMPER_DEADTIME 1000  		// linear motion dead-time (ms) after bumper is allowed to trigger
-#define BUMPER_TRIGGER_DELAY  0		// bumper must be active for (ms) to trigger
-#define BUMPER_MAX_TRIGGER_TIME 30	// if bumpersensor stays permanent triggered mower will stop with bumper error (time in seconds; 0 = disabled)																																				  
+#define BUMPER_DEADTIME 800  		// linear motion dead-time (ms) after bumper is allowed to trigger
+#define BUMPER_TRIGGER_DELAY  30		// bumper must be active for (ms) to trigger
+#define BUMPER_MAX_TRIGGER_TIME 50	// if bumpersensor stays permanent triggered mower will stop with bumper error (time in seconds; 0 = disabled)																																				  
 
 // ------ LiDAR bumper ------------------------------------------
 #define LIDAR_BUMPER_ENABLE false
@@ -365,7 +312,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 //#define CURRENT_FACTOR 1.98   // PCB1.4 (non-bridged INA169, max. 2.5A)
 //#define CURRENT_FACTOR 2.941  // PCB1.4 (bridged INA169, max. 5A)
 
-#define GO_HOME_VOLTAGE   25.5  // start going to dock below this voltage
+#define GO_HOME_VOLTAGE   24.8  // start going to dock below this voltage
 // The battery will charge if both battery voltage is below that value and charging current is above that value.
 #define BAT_FULL_VOLTAGE  30.0  // start mowing again at this voltage
 #define BAT_UNDERVOLTAGE  18.9  // battery switch off voltage
@@ -418,19 +365,17 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define CPG_CONFIG_FILTER_NCNOTHRS 0   // C/N0 Threshold #SVs: 10 (robust), 6 (less robust)
 #define CPG_CONFIG_FILTER_CNOTHRS  0   // 30 dbHz (robust), 13 dbHz (less robust)
 
-// ------ GPS antenna offset correction -------------------------
-// GPS antenna position relative to robot center (meters)
-// Use this if GPS antenna is not mounted at robot center
-#define ENABLE_ANTENNA_OFFSET_CORRECTION  true    // enable GPS antenna offset correction? (uncomment to activate)
-#define GPS_ANTENNA_OFFSET_X  -0.20  // Meter, forward from robot center (positive = forward, negative = backward)
-#define GPS_ANTENNA_OFFSET_Y  0.00  // Meter, sideways from robot center (positive = right, negative = left)  
-#define GPS_ANTENNA_OFFSET_Z  0.25  // Meter, vertical from robot center (positive = up, negative = down)
 
+#define GPS_ANTENNA_OFFSET_X  -0.20  // Meter, vorwärts vom Roboterzentrum
+#define GPS_ANTENNA_OFFSET_Y  0.00  // Meter, seitlich vom Roboterzentrum  
+#define GPS_ANTENNA_OFFSET_Z  0.25  // Meter, vertikal vom Roboterzentrum
+//#define ENABLE_ANTENNA_OFFSET_CORRECTION  // Aktiviert die Antennen-Offset-Korrektur
 
 // ------ obstacle detection and avoidance  -------------------------
 
 #define ENABLE_PATH_FINDER  true     // path finder calculates routes around exclusions and obstacles 
 //#define ENABLE_PATH_FINDER  false
+#define PATHFINDER_USE_EUCLIDEAN_HEURISTIC  true  // use Euclidean distance instead of Manhattan distance for A* heuristic
 #define ALLOW_ROUTE_OUTSIDE_PERI_METER 1.0   // max. distance (m) to allow routing from outside perimeter 
 // (increase if you get 'no map route' errors near perimeter)
 
@@ -440,7 +385,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define OBSTACLE_AVOIDANCE true   // try to find a way around obstacle
 //#define OBSTACLE_AVOIDANCE false  // stop robot on obstacle
 #define OBSTACLE_DIAMETER 1.2   // choose diameter of obstacles placed in front of robot (m) for obstacle avoidance
-#define DISABLE_MOW_MOTOR_AT_OBSTACLE true // switch off mow motor while escape at detected obstacle; set false if mow motor shall not be stopped at detected obstacles
+#define DISABLE_MOW_MOTOR_AT_OBSTACLE false // switch off mow motor while escape at detected obstacle; set false if mow motor shall not be stopped at detected obstacles
 
 // detect robot being kidnapped? robot will try GPS recovery if distance to tracked path is greater than a certain value
 // (false GPS fix recovery), and if that fails go into error 
@@ -566,11 +511,11 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
   #define BLE SerialBLE             
   #define SERIAL_BLE_PATH "/dev/null"    // dummy serial device    
   #define GPS SerialGPS
-  #define SERIAL_GPS_PATH "/dev/ttyACM0"  
+  #define SERIAL_GPS_PATH "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00"  
   #define GPS_HOST "127.0.0.1"  
   #define GPS_PORT 2947
   #define ROBOT SerialROBOT
-  #define SERIAL_ROBOT_PATH "/dev/ttyS0"
+  #define SERIAL_ROBOT_PATH "/dev/ttyS0"  
   #define NTRIP SerialNTRIP
   #define SERIAL_NTRIP_PATH "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_00000000-if00-port0"    
 #endif

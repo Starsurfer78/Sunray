@@ -13,9 +13,21 @@
 #include "Stats.h"
 #include "events.h"
 
+// LineTracker constants
+const float SMOOTH_CURVE_TARGET_TOLERANCE = 0.2;        // target reached tolerance for smooth curves
+const float ROTATION_DISTANCE_THRESHOLD = 0.5;          // distance threshold for allowing rotations
+const float ROTATION_ANGULAR_SPEED = 29.0 / 180.0 * PI; // 29 degree/s rotation speed
+const float ROTATION_ANGLE_RESET_THRESHOLD = 90.0;      // angle threshold for resetting rotation direction
+const float APPROACH_SPEED_DISTANCE = 0.5;              // distance for speed reduction when approaching waypoints
+const float APPROACH_SPEED_VALUE = 0.1;                 // reduced speed value when approaching
+const float FLOAT_SOLUTION_MAX_SPEED = 0.1;             // max speed for GPS float solution
+const float OBSTACLE_SLOW_SPEED = 0.1;                  // speed when near obstacles
+const float GROUND_SPEED_THRESHOLD = 0.03;              // minimum ground speed threshold
+const float LINEAR_MOTION_TIMEOUT = 5000;               // timeout for linear motion in ms
+const float REFLECTOR_TAG_MAX_ANGULAR = 0.015;          // max angular speed for reflector tag mode
+const float REFLECTOR_TAG_MAX_LINEAR = 0.05;            // max linear speed for reflector tag mode
+const float MOW_MOTOR_SPINUP_TIMEOUT = 10000;           // mow motor spin-up timeout in ms
 
-//PID pidLine(0.2, 0.01, 0); // not used
-//PID pidAngle(2, 0.1, 0);  // not used
 Polygon circle(8);
 
 float stanleyTrackingNormalK = STANLEY_CONTROL_K_NORMAL;
@@ -35,6 +47,60 @@ bool printmotoroverload = false;
 bool trackerDiffDelta_positive = false;
 float lastLineDist = 0;
 
+// Calculate linear speed based on current conditions
+float calculateLinearSpeed(float setSpeed, bool straight, bool mow, bool trackslow_allowed) {
+  float linear = 1.0;
+  
+  if (maps.trackSlow && trackslow_allowed) {
+    // planner forces slow tracking (e.g. docking etc)
+    linear = DOCK_LINEAR_SPEED; // 0.1           
+  } else if (     ((setSpeed > 0.2) && (maps.distanceToTargetPoint(stateX, stateY) < APPROACH_SPEED_DISTANCE) && (!straight))   // approaching
+        || ((linearMotionStartTime != 0) && (millis() < linearMotionStartTime + 3000))                      // leaving  
+     ) 
+  {
+    linear = APPROACH_SPEED_VALUE; // reduce speed when approaching/leaving waypoints          
+  } 
+  else {
+    if ((stateLocalizationMode == LOC_GPS) && (gps.solution == SOL_FLOAT)){        
+      linear = min(setSpeed, FLOAT_SOLUTION_MAX_SPEED); // reduce speed for float solution
+    } else
+      linear = setSpeed;         // desired speed
+    if (bumperDriver.nearObstacle()){
+      linear = OBSTACLE_SLOW_SPEED;  // slow down near obstacles 
+    }
+    if (lidarBumper.nearObstacle()){
+      linear = OBSTACLE_SLOW_SPEED;  // slow down near obstacles 
+    }
+    if (sonar.nearObstacle()) {
+      linear = OBSTACLE_SLOW_SPEED; // slow down near obstacles
+    }
+  }      
+  // slow down speed in case of overload and overwrite all prior speed 
+  if ( (motor.motorLeftOverload) || (motor.motorRightOverload) || (motor.motorMowOverload) ){
+    if (!printmotoroverload) {
+        Logger.event(EVT_MOTOR_OVERLOAD_REDUCE_SPEED);
+        CONSOLE.println("motor overload detected: reducing linear speed");
+    }
+    printmotoroverload = true;
+    linear = min(linear, MOTOR_OVERLOAD_SPEED);  
+  } else {
+    printmotoroverload = false;
+  }
+  
+  return linear;
+}
+
+// Calculate angular speed using Stanley controller
+float calculateStanleyControl(float trackerDiffDelta, float lateralError, bool trackslow_allowed) {
+  float k = stanleyTrackingNormalK;
+  float p = stanleyTrackingNormalP;    
+  if (maps.trackSlow && trackslow_allowed) {
+    k = stanleyTrackingSlowK;   
+    p = stanleyTrackingSlowP;          
+  }
+  return p * trackerDiffDelta + atan2(k * lateralError, (0.001 + fabs(motor.linearSpeedSet)));
+}
+
 // control robot velocity (linear,angular) to track line to next waypoint (target)
 // uses a stanley controller for line tracking
 // https://medium.com/@dingyan7361/three-methods-of-vehicle-lateral-control-pure-pursuit-stanley-and-mpc-db8cc1d32081
@@ -53,28 +119,12 @@ void trackLine(bool runControl){
   float distToPath = distanceLine(stateX, stateY, lastTarget.x(), lastTarget.y(), target.x(), target.y());        
 
   float lineDist = maps.distanceToTargetPoint(lastTarget.x(), lastTarget.y());
-  /*if ((abs(lineDist-lastLineDist ) > 0.0) || (abs(distToPath) > 0.5)) {
-    CONSOLE.print("distToPath=");
-    CONSOLE.print(distToPath);
-    CONSOLE.print(" x=");
-    CONSOLE.print(stateX);
-    CONSOLE.print(" y=");    
-    CONSOLE.print(stateY);
-    CONSOLE.print(" lastX=");    
-    CONSOLE.print(lastTarget.x());
-    CONSOLE.print(" lastY=");    
-    CONSOLE.print(lastTarget.y());
-    CONSOLE.print(" tgX=");    
-    CONSOLE.print(target.x());
-    CONSOLE.print(" tgY=");    
-    CONSOLE.println(target.y());
-    lastLineDist = lineDist;
-  }*/
+
   float targetDist = maps.distanceToTargetPoint(stateX, stateY);
   
   float lastTargetDist = maps.distanceToLastTargetPoint(stateX, stateY);  
   if (SMOOTH_CURVES)
-    targetReached = (targetDist < 0.2);    
+    targetReached = (targetDist < SMOOTH_CURVE_TARGET_TOLERANCE);    
   else 
     targetReached = (targetDist < TARGET_REACHED_TOLERANCE);
 
@@ -82,7 +132,7 @@ void trackLine(bool runControl){
   // allow rotations only near last or next waypoint or if too far away from path
   // it might race between rotating mower and targetDist check below
   // if we race we still have rotateLeft or rotateRight true
-  if ( (targetDist < 0.5) || (lastTargetDist < 0.5) || (fabs(distToPath) > 0.5) ||
+  if ( (targetDist < ROTATION_DISTANCE_THRESHOLD) || (lastTargetDist < ROTATION_DISTANCE_THRESHOLD) || (fabs(distToPath) > ROTATION_DISTANCE_THRESHOLD) ||
        rotateLeft || rotateRight ) {
     if (SMOOTH_CURVES)
       angleToTargetFits = (fabs(trackerDiffDelta)/PI*180.0 < 120);
@@ -99,14 +149,14 @@ void trackLine(bool runControl){
   if (!angleToTargetFits){
     // angular control (if angle to far away, rotate to next waypoint)
     linear = 0;
-    angular = 29.0 / 180.0 * PI; //  29 degree/s (0.5 rad/s);               
+    angular = ROTATION_ANGULAR_SPEED;               
      // decide for one rotation direction (and keep it)
     if ((!rotateLeft) && (!rotateRight)) {
       if (trackerDiffDelta < 0) rotateLeft = true;
         else rotateRight = true;      
     }
     if (rotateLeft) angular *= -1;
-    if (fabs(trackerDiffDelta)/PI*180.0 < 90){
+    if (fabs(trackerDiffDelta)/PI*180.0 < ROTATION_ANGLE_RESET_THRESHOLD){
       rotateLeft = false;  // reset rotate direction
       rotateRight = false;
     }   
@@ -132,63 +182,10 @@ void trackLine(bool runControl){
         }
     }
 
-    if (maps.trackSlow && trackslow_allowed) {
-      // planner forces slow tracking (e.g. docking etc)
-      linear = DOCK_LINEAR_SPEED; // 0.1           
-    } else if (     ((setSpeed > 0.2) && (maps.distanceToTargetPoint(stateX, stateY) < 0.5) && (!straight))   // approaching
-          || ((linearMotionStartTime != 0) && (millis() < linearMotionStartTime + 3000))                      // leaving  
-       ) 
-    {
-      linear = 0.1; // reduce speed when approaching/leaving waypoints          
-      //CONSOLE.println("SLOW: approach")
-    } 
-    else {
-      if ((stateLocalizationMode == LOC_GPS) && (gps.solution == SOL_FLOAT)){        
-        linear = min(setSpeed, 0.1); // reduce speed for float solution
-        //CONSOLE.println("SLOW: float");
-      } else
-        linear = setSpeed;         // desired speed
-      if (bumperDriver.nearObstacle()){
-        linear = 0.1;  // slow down near obstacles 
-        //CONSOLE.println("SLOW: BUMPER");      
-      }
-      if (lidarBumper.nearObstacle()){
-        linear = 0.1;  // slow down near obstacles 
-        //CONSOLE.println("SLOW: LiDAR");      
-      }
-      if (sonar.nearObstacle()) {
-        linear = 0.1; // slow down near obstacles
-        //CONSOLE.println("SLOW: sonar");      
-      }
-    }      
-    // slow down speed in case of overload and overwrite all prior speed 
-    if ( (motor.motorLeftOverload) || (motor.motorRightOverload) || (motor.motorMowOverload) ){
-      if (!printmotoroverload) {
-          Logger.event(EVT_MOTOR_OVERLOAD_REDUCE_SPEED);
-          CONSOLE.println("motor overload detected: reducing linear speed");
-      }
-      printmotoroverload = true;
-      linear = min(linear, MOTOR_OVERLOAD_SPEED);  
-      //CONSOLE.println("SLOW: overload");
-    } else {
-      printmotoroverload = false;
-    }   
+    linear = calculateLinearSpeed(setSpeed, straight, mow, trackslow_allowed);   
           
-    //angula                                    r = 3.0 * trackerDiffDelta + 3.0 * lateralError;       // correct for path errors 
-    float k = stanleyTrackingNormalK; // STANLEY_CONTROL_K_NORMAL;
-    float p = stanleyTrackingNormalP; // STANLEY_CONTROL_P_NORMAL;    
-    if (maps.trackSlow && trackslow_allowed) {
-      k = stanleyTrackingSlowK; //STANLEY_CONTROL_K_SLOW;   
-      p = stanleyTrackingSlowP; //STANLEY_CONTROL_P_SLOW;          
-    }
-    angular =  p * trackerDiffDelta + atan2(k * lateralError, (0.001 + fabs(motor.linearSpeedSet)));       // correct for path errors           
-    /*pidLine.w = 0;              
-    pidLine.x = lateralError;
-    pidLine.max_output = PI;
-    pidLine.y_min = -PI;
-    pidLine.y_max = PI;
-    pidLine.compute();
-    angular = -pidLine.y;   */
+    angular = calculateStanleyControl(trackerDiffDelta, lateralError, trackslow_allowed);           
+
     //CONSOLE.print(lateralError);        
     //CONSOLE.print(",");        
     //CONSOLE.println(angular/PI*180.0);            
@@ -206,7 +203,7 @@ void trackLine(bool runControl){
   if (stateLocalizationMode == LOC_GPS){
     if  ((gps.solution == SOL_FIXED) || (gps.solution == SOL_FLOAT)){        
       if (abs(linear) > 0.06) {
-        if ((millis() > linearMotionStartTime + 5000) && (stateGroundSpeed < 0.03)){
+        if ((millis() > linearMotionStartTime + LINEAR_MOTION_TIMEOUT) && (stateGroundSpeed < GROUND_SPEED_THRESHOLD)){
           // if in linear motion and not enough ground speed => obstacle
           //if ( (GPS_SPEED_DETECTION) && (!maps.isUndocking()) ) { 
           if (GPS_SPEED_DETECTION) {         
@@ -242,12 +239,12 @@ void trackLine(bool runControl){
       angular = 0; 
     } else {
       if (!buzzer.isPlaying()) buzzer.sound(SND_WARNING, true);
-      float maxAngular = 0.015;  // 0.02
-      float maxLinear = 0.05;      
+      float maxAngular = REFLECTOR_TAG_MAX_ANGULAR;
+      float maxLinear = REFLECTOR_TAG_MAX_LINEAR;      
       angular =  max(min(1.0 * trackerDiffDelta, maxAngular), -maxAngular);
       angular =  max(min(angular, maxAngular), -maxAngular);      
-      linear = 0.05;      
-      if (maps.trackReverse) linear = -0.05;   // reverse line tracking needs negative speed           
+      linear = REFLECTOR_TAG_MAX_LINEAR;      
+      if (maps.trackReverse) linear = -REFLECTOR_TAG_MAX_LINEAR;   // reverse line tracking needs negative speed           
     }
   }
   if (stateLocalizationMode == LOC_GUIDANCE_SHEET){
@@ -296,7 +293,7 @@ void trackLine(bool runControl){
   if (detectLift()) mow = false;
   
   if (mow)  { 
-    if (millis() < motor.motorMowSpinUpTime + 10000){
+    if (millis() < motor.motorMowSpinUpTime + MOW_MOTOR_SPINUP_TIMEOUT){
        // wait until mowing motor is running
       if (!buzzer.isPlaying()) buzzer.sound(SND_WARNING, true);
       linear = 0;

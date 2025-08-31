@@ -68,7 +68,6 @@ void dumpState(){
 
 void updateStateOpText(){
   switch (stateOp){
-    // Basis-Zustände (Rückwärtskompatibilität)
     case OP_IDLE: stateOpText = "idle"; break;
     case OP_MOW: stateOpText = "mow"; break;
     case OP_CHARGE: stateOpText = "charge"; break;
@@ -97,17 +96,6 @@ void updateStateOpText(){
       }
       break;
     case OP_DOCK: stateOpText = "dock"; break;
-    
-    // Erweiterte granulare Zustände
-    case OP_ESCAPE_REVERSE: stateOpText = "escape_reverse"; break;
-    case OP_ESCAPE_FORWARD: stateOpText = "escape_forward"; break;
-    case OP_GPS_WAIT_FIX: stateOpText = "gps_wait_fix"; break;
-    case OP_GPS_WAIT_FLOAT: stateOpText = "gps_wait_float"; break;
-    case OP_GPS_RECOVERY: stateOpText = "gps_recovery"; break;
-    case OP_IMU_CALIBRATION: stateOpText = "imu_calibration"; break;
-    case OP_RELOCALIZATION: stateOpText = "relocalization"; break;
-    case OP_KIDNAP_WAIT: stateOpText = "kidnap_wait"; break;
-    
     default: stateOpText = "unknown"; break;
   }
   switch (gps.solution){

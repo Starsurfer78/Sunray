@@ -9,11 +9,7 @@
 #define SERIAL_ROBOT_DRIVER_H
 
 #include <Arduino.h>
-#include "../../config.h"
 #include "RobotDriver.h"
-#ifdef ENABLE_SIMPLE_WIFI_RESTART
-  #include "../../SimpleWifiRestart.h"
-#endif
 #ifdef __linux__
   #include <Process.h>
 #endif
@@ -62,12 +58,13 @@ class SerialRobotDriver: public RobotDriver {
     bool setImuPowerState(bool state);
   protected:    
     bool ledPanelInstalled;
-    #ifdef ENABLE_SIMPLE_WIFI_RESTART
-      SimpleWifiRestart wifiRestart;
-    #endif
     #ifdef __linux__
       Process cpuTempProcess;
-      Process wifiStatusProcess;    
+      Process wifiStatusProcess;
+      // WiFi restart functionality
+      int wifiFailureCount;
+      unsigned long lastWifiCheckTime;
+      bool lastWifiConnected;
     #endif
     String cmd;
     String cmdResponse;

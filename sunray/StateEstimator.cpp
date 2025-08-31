@@ -14,10 +14,6 @@
 #include "i2c.h"
 #include "events.h"
 
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-#include "src/driver/GpsAntennaOffset.h"
-#endif
-
 
 LocalizationMode stateLocalizationMode = LOC_GPS;
 
@@ -69,10 +65,6 @@ bool imuIsCalibrating = false;
 int imuCalibrationSeconds = 0;
 unsigned long nextImuCalibrationSecond = 0;
 unsigned long nextDumpTime = 0;
-
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-GpsAntennaOffset gpsAntennaOffset;
-#endif
 
 
 // https://learn.sparkfun.com/tutorials/9dof-razor-imu-m0-hookup-guide#using-the-mpu-9250-dmp-arduino-library
@@ -375,13 +367,7 @@ void computeRobotState(){
   } else {
     posN = gps.relPosN;  
     posE = gps.relPosE;     
-  }
-  
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-  // Apply GPS antenna offset correction
-  float posD = gps.relPosD; // GPS down position
-  gpsAntennaOffset.correctPosition(posN, posE, posD, stateDelta);
-#endif   
+  }   
 
   if (fabs(motor.linearSpeedSet) < 0.001){       
     resetLastPos = true;

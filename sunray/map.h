@@ -238,6 +238,7 @@ class Map
     float distancePI(float x, float w);
     float distanceManhattan(Point &pos0, Point &pos1);
     float calcHeuristic(Point &pos0, Point &pos1);
+    int calculateAdaptiveTimeout(Point &src, Point &dst);
     float scalePIangles(float setAngle, float currAngle);
     bool lineIntersects (Point &p0, Point &p1, Point &p2, Point &p3);        
     bool linePolygonIntersection( Point &src, Point &dst, Polygon &poly);
@@ -245,6 +246,8 @@ class Map
     bool polygonOffset(Polygon &srcPoly, Polygon &dstPoly, float dist);
     int findNextNeighbor(NodeList &nodes, PolygonList &obstacles, Node &node, int startIdx);
     void findPathFinderSafeStartPoint(Point &src, Point &dst);
+    bool initializePathfinder(Point &src, Point &dst, Node *&start, Node *&end);
+    Node* executeAStarLoop(Node *start, Node *end);
     bool linePolygonIntersectPoint( Point &src, Point &dst, Polygon &poly, Point &sect);
     bool lineLineIntersection(Point &A, Point &B, Point &C, Point &D, Point &pt);
     bool isPointInBoundingBox(Point &pt, Point &A, Point &B);

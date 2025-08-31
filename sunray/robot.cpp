@@ -49,6 +49,9 @@
 #include "bumper.h"
 #include "mqtt.h"
 #include "events.h"
+#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
+#include "src/driver/GpsAntennaOffset.h"
+#endif
 
 // #define I2C_SPEED  10000
 #define _BV(x) (1 << (x))
@@ -669,16 +672,6 @@ void start(){
     gps.begin(GPS, GPS_BAUDRATE);   
   #endif
 
-#ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
-  // Initialize GPS antenna offset correction
-  gpsAntennaOffset.setOffset(GPS_ANTENNA_OFFSET_X, GPS_ANTENNA_OFFSET_Y, GPS_ANTENNA_OFFSET_Z);
-  gpsAntennaOffset.setEnabled(true);
-  CONSOLE.println("GPS antenna offset correction enabled");
-  CONSOLE.print("Offset X: "); CONSOLE.print(GPS_ANTENNA_OFFSET_X); CONSOLE.println(" m");
-  CONSOLE.print("Offset Y: "); CONSOLE.print(GPS_ANTENNA_OFFSET_Y); CONSOLE.println(" m");
-  CONSOLE.print("Offset Z: "); CONSOLE.print(GPS_ANTENNA_OFFSET_Z); CONSOLE.println(" m");
-#endif
-
   maps.begin();      
   //maps.clipperTest();
     
@@ -691,6 +684,19 @@ void start(){
   watchdogEnable(15000L);   // 15 seconds  
   
   startIMU(false);        
+  
+  // Initialize GPS antenna offset correction
+  #ifdef ENABLE_ANTENNA_OFFSET_CORRECTION
+    extern GpsAntennaOffset gpsAntennaOffset;
+    gpsAntennaOffset.setOffset(GPS_ANTENNA_OFFSET_X, GPS_ANTENNA_OFFSET_Y, GPS_ANTENNA_OFFSET_Z);
+    gpsAntennaOffset.setEnabled(true);
+    CONSOLE.print("GPS antenna offset initialized: X=");
+    CONSOLE.print(GPS_ANTENNA_OFFSET_X);
+    CONSOLE.print(", Y=");
+    CONSOLE.print(GPS_ANTENNA_OFFSET_Y);
+    CONSOLE.print(", Z=");
+    CONSOLE.println(GPS_ANTENNA_OFFSET_Z);
+  #endif
   
   buzzer.sound(SND_READY);  
   battery.resetIdle();        
@@ -1012,7 +1018,12 @@ void run(){
   
   
   if (millis() >= nextControlTime){        
-    nextControlTime = millis() + 20; 
+    // Operation-specific timing: IDLE/DOCK/CHARGE=10Hz (100ms), MOW=50Hz (20ms), others=50Hz (20ms)
+    unsigned long controlInterval = 20; // default 50Hz
+    if ((stateOp == OP_IDLE) || (stateOp == OP_DOCK) || (stateOp == OP_CHARGE)) {
+      controlInterval = 100; // 10Hz for IDLE/DOCK/CHARGE operations
+    }
+    nextControlTime = millis() + controlInterval;
     controlLoops++;    
     
     computeRobotState();
