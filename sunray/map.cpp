@@ -35,6 +35,9 @@ const float POLYGON_BOUNDS_INIT = 9999.0;     // Initial value for bounding box 
 const byte POLYGONLIST_FILE_MARKER = 0xCC;    // File integrity marker for PolygonList serialization
 const short MAX_POLYGONS_IN_LIST = 5000;      // Maximum allowed polygons per list
 
+// NodeList class constants
+const short MAX_NODES_IN_LIST = 20000;        // Maximum allowed nodes per list (for pathfinding)
+
 unsigned long memoryCorruptions = 0;        
 unsigned long memoryAllocErrors = 0;
 
@@ -369,54 +372,61 @@ bool PolygonList::write(File &file){
 
 // -----------------------------------
 
+// Default constructor - creates empty pathfinding node
 Node::Node(){
   init();
 }
 
+// Constructor with point and parent node for A* pathfinding
 Node::Node(Point *aPoint, Node *aParentNode){
   init();
   point = aPoint;
   parent = aParentNode;  
 };
 
+// Initialize node with default A* algorithm values
 void Node::init(){
-  g = 0;
-  h = 0;  
-  f = 0;
-  opened = false;
-  closed = false;
+  g = 0;      // Cost from start node
+  h = 0;      // Heuristic cost to goal
+  f = 0;      // Total cost (g + h)
+  opened = false;  // Node in open list flag
+  closed = false;  // Node in closed list flag
   point = NULL;
   parent = NULL;
 }
 
+// Deallocate node resources (currently no dynamic allocation)
 void Node::dealloc(){
 }
 
 
 // -----------------------------------
 
-
-
+// Default constructor - creates empty node list for pathfinding
 NodeList::NodeList(){
   init();
 }
-  
+
+// Constructor with pre-allocated node capacity for pathfinding
 NodeList::NodeList(short aNumNodes){
   init();
   alloc(aNumNodes);  
 }
 
+// Initialize node list to empty state
 void NodeList::init(){
   numNodes = 0;
   nodes = NULL;  
 }
 
+// Destructor - memory cleanup handled by explicit dealloc() calls
 NodeList::~NodeList(){
 }
 
+// Allocate memory for node list with corruption detection
 bool NodeList::alloc(short aNumNodes){  
   if (aNumNodes == numNodes) return true;
-  if ((aNumNodes < 0) || (aNumNodes > 20000)) {
+  if ((aNumNodes < 0) || (aNumNodes > MAX_NODES_IN_LIST)) {
     CONSOLE.println("ERROR NodeList::alloc invalid number");    
     return false;
   }
@@ -442,6 +452,7 @@ bool NodeList::alloc(short aNumNodes){
   return true;
 }
 
+// Deallocate node list memory with corruption check
 void NodeList::dealloc(){
   if (nodes == NULL) return;
   for (int i=0; i < numNodes; i++){
