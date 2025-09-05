@@ -31,6 +31,10 @@ const byte POLYGON_FILE_MARKER = 0xBB;        // File integrity marker for Polyg
 const short MAX_POLYGON_POINTS = 10000;       // Maximum allowed points per polygon
 const float POLYGON_BOUNDS_INIT = 9999.0;     // Initial value for bounding box calculations
 
+// PolygonList class constants
+const byte POLYGONLIST_FILE_MARKER = 0xCC;    // File integrity marker for PolygonList serialization
+const short MAX_POLYGONS_IN_LIST = 5000;      // Maximum allowed polygons per list
+
 unsigned long memoryCorruptions = 0;        
 unsigned long memoryAllocErrors = 0;
 
@@ -238,26 +242,31 @@ void Polygon::getCenter(Point &pt){
 
 // -----------------------------------
 
+// Default constructor - creates empty polygon list
 PolygonList::PolygonList(){
   init();
 }
-  
+
+// Constructor with pre-allocated polygon capacity
 PolygonList::PolygonList(short aNumPolygons){
   init();
   alloc(aNumPolygons);  
 }
 
+// Initialize polygon list to empty state
 void PolygonList::init(){
   numPolygons = 0;
   polygons = NULL;  
 }
 
+// Destructor - memory cleanup handled by explicit dealloc() calls
 PolygonList::~PolygonList(){
 }
 
+// Allocate memory for polygon list with corruption detection
 bool PolygonList::alloc(short aNumPolygons){  
   if (aNumPolygons == numPolygons) return true;
-  if ((aNumPolygons < 0) || (aNumPolygons > 5000)) {
+  if ((aNumPolygons < 0) || (aNumPolygons > MAX_POLYGONS_IN_LIST)) {
     CONSOLE.println("ERROR PolygonList::alloc invalid number");    
     return false;
   }
@@ -283,6 +292,7 @@ bool PolygonList::alloc(short aNumPolygons){
   return true;
 }
 
+// Deallocate polygon list memory with corruption check
 void PolygonList::dealloc(){
   if (polygons == NULL) return;
   for (int i=0; i < numPolygons; i++){
@@ -294,6 +304,7 @@ void PolygonList::dealloc(){
   numPolygons = 0;  
 }
 
+// Calculate total number of points across all polygons
 int PolygonList::numPoints(){
   int num = 0;
   for (int i=0; i < numPolygons; i++){
@@ -302,6 +313,7 @@ int PolygonList::numPoints(){
   return num;
 }
 
+// Debug output - print all polygons with indices to console
 void PolygonList::dump(){
   for (int i=0; i < numPolygons; i++){
     CONSOLE.print(i);
@@ -311,6 +323,7 @@ void PolygonList::dump(){
   CONSOLE.println();
 }
 
+// Calculate checksum for data integrity verification
 long PolygonList::crc(){
   long crc = 0;
   for (int i=0; i < numPolygons; i++){
@@ -319,9 +332,10 @@ long PolygonList::crc(){
   return crc;
 }
 
+// Read polygon list from file with integrity check (0xCC marker)
 bool PolygonList::read(File &file){
   byte marker = file.read();
-  if (marker != 0xCC){
+  if (marker != POLYGONLIST_FILE_MARKER){
     CONSOLE.println("ERROR reading polygon list: invalid marker");
     return false;
   }
@@ -335,8 +349,9 @@ bool PolygonList::read(File &file){
   return true;
 }
 
+// Write polygon list to file with integrity marker (0xCC)
 bool PolygonList::write(File &file){
-  if (file.write(0xCC) == 0) {
+  if (file.write(POLYGONLIST_FILE_MARKER) == 0) {
     CONSOLE.println("ERROR writing polygon list marker");
     return false;  
   } 
