@@ -26,6 +26,11 @@ Point *CHECK_POINT = (Point*)0x12345678;  // just some arbitray address for corr
 const float METERS_TO_CM_FACTOR = 100.0;     // Conversion factor: meters to centimeters
 const byte POINT_FILE_MARKER = 0xAA;          // File integrity marker for Point serialization
 
+// Polygon class constants
+const byte POLYGON_FILE_MARKER = 0xBB;        // File integrity marker for Polygon serialization
+const short MAX_POLYGON_POINTS = 10000;       // Maximum allowed points per polygon
+const float POLYGON_BOUNDS_INIT = 9999.0;     // Initial value for bounding box calculations
+
 unsigned long memoryCorruptions = 0;        
 unsigned long memoryAllocErrors = 0;
 
@@ -105,28 +110,32 @@ bool Point::write(File &file){
 
 
 // -----------------------------------
+// Default constructor - creates empty polygon
 Polygon::Polygon(){  
   init();
 }
 
-
+// Constructor with pre-allocated point capacity
 Polygon::Polygon(short aNumPoints){ 
   init();
   alloc(aNumPoints);  
 }
 
+// Initialize polygon to empty state
 void Polygon::init(){  
   numPoints = 0;  
   points = NULL;
 }
 
+// Destructor - memory cleanup handled by explicit dealloc() calls
 Polygon::~Polygon(){
   // dealloc();
 }
 
+// Allocate memory for polygon points with corruption detection
 bool Polygon::alloc(short aNumPoints){
   if (aNumPoints == numPoints) return true;
-  if ((aNumPoints < 0) || (aNumPoints > 10000)) {
+  if ((aNumPoints < 0) || (aNumPoints > MAX_POLYGON_POINTS)) {
     CONSOLE.println("ERROR Polygon::alloc invalid number");    
     return false;
   }
@@ -149,6 +158,7 @@ bool Polygon::alloc(short aNumPoints){
   return true;
 }
 
+// Deallocate polygon memory with corruption check
 void Polygon::dealloc(){
   if (points == NULL) return;  
   if (points[numPoints].px != CHECK_ID) memoryCorruptions++;
@@ -158,6 +168,7 @@ void Polygon::dealloc(){
   numPoints = 0;  
 }
 
+// Debug output - print all polygon points to console
 void Polygon::dump(){
   for (int i=0; i < numPoints; i++){
     CONSOLE.print("(");
@@ -170,6 +181,7 @@ void Polygon::dump(){
   CONSOLE.println();
 }
 
+// Calculate checksum for data integrity verification
 long Polygon::crc(){
   long crc = 0;
   for (int i=0; i < numPoints; i++){
@@ -178,9 +190,10 @@ long Polygon::crc(){
   return crc;
 }
 
+// Read polygon data from file with integrity check (0xBB marker)
 bool Polygon::read(File &file){
   byte marker = file.read();
-  if (marker != 0xBB){
+  if (marker != POLYGON_FILE_MARKER){
     CONSOLE.println("ERROR reading polygon: invalid marker");
     return false;
   }
@@ -194,8 +207,9 @@ bool Polygon::read(File &file){
   return true;
 }
 
+// Write polygon data to file with integrity marker (0xBB)
 bool Polygon::write(File &file){
-  if (file.write(0xBB) == 0) return false;  
+  if (file.write(POLYGON_FILE_MARKER) == 0) return false;  
   if (file.write((uint8_t*)&numPoints, sizeof(numPoints)) == 0) {
     CONSOLE.println("ERROR writing polygon");
     return false; 
@@ -207,11 +221,12 @@ bool Polygon::write(File &file){
   return true;  
 }
 
+// Calculate polygon center point using bounding box method
 void Polygon::getCenter(Point &pt){
-  float minX = 9999;
-  float maxX = -9999;
-  float minY = 9999;
-  float maxY = -9999;
+  float minX = POLYGON_BOUNDS_INIT;
+  float maxX = -POLYGON_BOUNDS_INIT;
+  float minY = POLYGON_BOUNDS_INIT;
+  float maxY = -POLYGON_BOUNDS_INIT;
   for (int i=0; i < numPoints; i++){
     minX = min(minX, points[i].x());
     maxX = max(maxX, points[i].x());
