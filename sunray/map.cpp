@@ -22,6 +22,10 @@
 
 Point *CHECK_POINT = (Point*)0x12345678;  // just some arbitray address for corruption check
 
+// Point class constants
+const float METERS_TO_CM_FACTOR = 100.0;     // Conversion factor: meters to centimeters
+const byte POINT_FILE_MARKER = 0xAA;          // File integrity marker for Point serialization
+
 unsigned long memoryCorruptions = 0;        
 unsigned long memoryAllocErrors = 0;
 
@@ -39,19 +43,19 @@ void Point::init(){
 
 // Get X coordinate in meters (converts from internal cm storage)
 float Point::x(){
-  return ((float)px) / 100.0;
+  return ((float)px) / METERS_TO_CM_FACTOR;
 }
 
 // Get Y coordinate in meters (converts from internal cm storage)
 float Point::y(){
-  return ((float)py) / 100.0;
+  return ((float)py) / METERS_TO_CM_FACTOR;
 }
 
 
 // Constructor with coordinates in meters (stored internally as cm for precision)
 Point::Point(float ax, float ay){
-  px = ax * 100;
-  py = ay * 100;
+  px = ax * METERS_TO_CM_FACTOR;
+  py = ay * METERS_TO_CM_FACTOR;
 }
 
 // Copy coordinates from another point
@@ -62,8 +66,8 @@ void Point::assign(Point &fromPoint){
 
 // Set coordinates in meters (converted to cm for internal storage)
 void Point::setXY(float ax, float ay){
-  px = ax * 100;
-  py = ay * 100;
+  px = ax * METERS_TO_CM_FACTOR;
+  py = ay * METERS_TO_CM_FACTOR;
 }
 
 // Calculate simple checksum for data integrity verification
@@ -74,7 +78,7 @@ long Point::crc(){
 // Read point data from file with integrity check (0xAA marker)
 bool Point::read(File &file){
   byte marker = file.read();
-  if (marker != 0xAA){
+  if (marker != POINT_FILE_MARKER){
     CONSOLE.println("ERROR reading point: invalid marker");
     return false;
   }
@@ -90,7 +94,7 @@ bool Point::read(File &file){
 // Write point data to file with integrity marker (0xAA)
 bool Point::write(File &file){
   bool res = true;
-  res &= (file.write(0xAA) != 0);
+  res &= (file.write(POINT_FILE_MARKER) != 0);
   res &= (file.write((uint8_t*)&px, sizeof(px)) != 0);
   res &= (file.write((uint8_t*)&py, sizeof(py)) != 0);
   if (!res) {
