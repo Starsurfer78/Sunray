@@ -26,43 +26,52 @@ unsigned long memoryCorruptions = 0;
 unsigned long memoryAllocErrors = 0;
 
 
+// Default constructor - initializes point at origin (0,0)
 Point::Point(){
   init();
 }
 
+// Initialize point coordinates to origin
 void Point::init(){
   px = 0;
   py = 0;
 }
 
+// Get X coordinate in meters (converts from internal cm storage)
 float Point::x(){
   return ((float)px) / 100.0;
 }
 
+// Get Y coordinate in meters (converts from internal cm storage)
 float Point::y(){
   return ((float)py) / 100.0;
 }
 
 
+// Constructor with coordinates in meters (stored internally as cm for precision)
 Point::Point(float ax, float ay){
   px = ax * 100;
   py = ay * 100;
 }
 
+// Copy coordinates from another point
 void Point::assign(Point &fromPoint){
   px = fromPoint.px;
   py = fromPoint.py;
 }
 
+// Set coordinates in meters (converted to cm for internal storage)
 void Point::setXY(float ax, float ay){
   px = ax * 100;
   py = ay * 100;
 }
 
+// Calculate simple checksum for data integrity verification
 long Point::crc(){
   return (px + py);  
 }
 
+// Read point data from file with integrity check (0xAA marker)
 bool Point::read(File &file){
   byte marker = file.read();
   if (marker != 0xAA){
@@ -78,6 +87,7 @@ bool Point::read(File &file){
   return res;
 }
 
+// Write point data to file with integrity marker (0xAA)
 bool Point::write(File &file){
   bool res = true;
   res &= (file.write(0xAA) != 0);
