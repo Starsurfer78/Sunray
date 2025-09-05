@@ -12,47 +12,11 @@
 #include "Point.h"
 
 
+#include "Polygon.h"
+
 // waypoint type
 enum WayType {WAY_PERIMETER, WAY_EXCLUSION, WAY_DOCK, WAY_MOW, WAY_FREE};
 typedef enum WayType WayType;
-
-// a closed loop of points
-class Polygon
-{
-  public:
-    Point *points;    
-    short numPoints;    
-    Polygon();
-    Polygon(short aNumPoints);
-    ~Polygon();
-    void init();
-    bool alloc(short aNumPoints);
-    void dealloc();
-    void dump();
-    long crc();
-    void getCenter(Point &pt);
-    bool read(File &file);
-    bool write(File &file);
-};
-
-// a list of polygons
-class PolygonList // owns polygons!
-{
-   public:
-     Polygon *polygons;    
-     short numPolygons;     
-     PolygonList();
-     PolygonList(short aNumPolygons);
-     ~PolygonList();
-     void init();
-     bool alloc(short aNumPolygons);
-     void dealloc();
-     void dump();
-     int numPoints();
-     long crc();
-     bool read(File &file);
-     bool write(File &file);
-};
 
 class Node   // nodes just hold references to points and other nodes
 {
