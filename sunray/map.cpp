@@ -38,6 +38,14 @@ const short MAX_POLYGONS_IN_LIST = 5000;      // Maximum allowed polygons per li
 // NodeList class constants
 const short MAX_NODES_IN_LIST = 20000;        // Maximum allowed nodes per list (for pathfinding)
 
+// Map class constants
+const uint32_t MAP_FILE_MARKER = 0x00001000;          // File format marker for map persistence
+const int MAP_MEMORY_CHECK_INTERVAL = 100;            // Check memory every N points during upload
+const int MAP_MIN_FREE_MEMORY = 20000;                // Minimum free memory required during map operations
+const int MAP_RANDOM_PERIMETER_STEPS = 30;            // Number of points for random map generation
+const float MAP_RANDOM_MAX_DISTANCE = 10.0;           // Maximum distance for random map points
+const float MAP_STRAIGHT_PATH_ANGLE_THRESHOLD = 20.0; // Angle threshold (degrees) for straight path detection
+
 unsigned long memoryCorruptions = 0;        
 unsigned long memoryAllocErrors = 0;
 
@@ -468,7 +476,8 @@ void NodeList::dealloc(){
 
 // ---------------------------------------------------------------------
 
-// rescale to -PI..+PI
+// Scale angle to range [-PI, PI]
+// Normalizes any angle to the standard range for consistent calculations
 float Map::scalePI(float v)
 {
   float d = v;
@@ -480,7 +489,8 @@ float Map::scalePI(float v)
 }
 
 
-// scale setangle, so that both PI angles have the same sign
+// Scale target angle relative to current angle to avoid large jumps
+// Prevents robot from taking the long way around when crossing PI/-PI boundary
 float Map::scalePIangles(float setAngle, float currAngle){
   if ((setAngle >= PI/2) && (currAngle <= -PI/2)) return (setAngle-2*PI);
     else if ((setAngle <= -PI/2) && (currAngle >= PI/2)) return (setAngle+2*PI);
@@ -488,7 +498,8 @@ float Map::scalePIangles(float setAngle, float currAngle){
 }
 
 
-// compute course (angle in rad) between two points
+// Calculate angle between two points in radians
+// Returns angle from point 1 to point 2, normalized to [-PI, PI]
 float Map::pointsAngle(float x1, float y1, float x2, float y2){
   float dX = x2 - x1;
   float dY = y2 - y1;
@@ -498,22 +509,20 @@ float Map::pointsAngle(float x1, float y1, float x2, float y2){
 
 
 
-// computes minimum distance between x radiant (current-value) and w radiant (set-value)
+// Compute minimum angular distance between two angles in radians
+// Returns the shortest rotational distance, accounting for circular nature of angles
+// Examples: 330° to 350° = -20°, 350° to 10° = -20°, 10° to 350° = 20°
 float Map::distancePI(float x, float w)
 {
-  // cases:
-  // w=330 degree, x=350 degree => -20 degree
-  // w=350 degree, x=10  degree => -20 degree
-  // w=10  degree, x=350 degree =>  20 degree
-  // w=0   degree, x=190 degree => 170 degree
-  // w=190 degree, x=0   degree => -170 degree
   float d = scalePI(w - x);
   if (d < -PI) d = d + 2*PI;
   else if (d > PI) d = d - 2*PI;
   return d; 
 }
 
-// This is the Manhattan distance
+// Calculate Manhattan distance between two points
+// Manhattan distance = |x1-x2| + |y1-y2| (sum of absolute differences)
+// Useful for grid-based pathfinding and approximate distance calculations
 float Map::distanceManhattan(Point &pos0, Point &pos1){
   float d1 = abs (pos1.x() - pos0.x());
   float d2 = abs (pos1.y() - pos0.y());
@@ -522,24 +531,26 @@ float Map::distanceManhattan(Point &pos0, Point &pos1){
 
 
 
+// Initialize map system and load existing map data
+// Sets up navigation parameters, GPS/IMU usage flags, and loads map from storage
 void Map::begin(){
   CONSOLE.println("Map::begin");
   memoryCorruptions = 0;
-  wayMode = WAY_MOW;
-  trackReverse = false;
-  trackSlow = false;
-  useGPSfixForPosEstimation = true;
-  useGPSfloatForPosEstimation = true;
-  useGPSfloatForDeltaEstimation = true;
-  useGPSfixForDeltaEstimation = true;
-  useIMU = true;
-  mowPointsIdx = 0;
-  freePointsIdx = 0;
-  dockPointsIdx = 0;
-  shouldDock = false; 
-  shouldRetryDock = false; 
-  shouldMow = false;         
-  mapCRC = 0;  
+  wayMode = WAY_MOW;                    // Start in mowing mode
+  trackReverse = false;                 // Normal forward tracking
+  trackSlow = false;                    // Normal speed tracking
+  useGPSfixForPosEstimation = true;     // Use GPS RTK fix for position
+  useGPSfloatForPosEstimation = true;   // Use GPS float for position
+  useGPSfloatForDeltaEstimation = true; // Use GPS float for heading
+  useGPSfixForDeltaEstimation = true;   // Use GPS RTK fix for heading
+  useIMU = true;                        // Enable IMU sensor fusion
+  mowPointsIdx = 0;                     // Reset mowing point index
+  freePointsIdx = 0;                    // Reset free navigation index
+  dockPointsIdx = 0;                    // Reset docking point index
+  shouldDock = false;                   // Clear docking request
+  shouldRetryDock = false;              // Clear dock retry flag
+  shouldMow = false;                    // Clear mowing request
+  mapCRC = 0;                           // Reset map checksum  
   CONSOLE.print("sizeof Point=");
   CONSOLE.println(sizeof(Point));  
   load();
@@ -548,13 +559,15 @@ void Map::begin(){
   //float distToLine = distanceLineInfinite(12.43, 6.18, 12.42, 6.18, 12.43, 6.18);  
 }
 
+// Calculate checksum for map data integrity verification
+// Combines CRCs from all map components to detect data corruption
 long Map::calcMapCRC(){   
   long crc = perimeterPoints.crc() + exclusions.crc() + dockPoints.crc() + mowPoints.crc();       
-  //CONSOLE.print("computed map crc=");  
-  //CONSOLE.println(crc);  
   return crc;
 }
 
+// Display comprehensive map statistics and current navigation state
+// Useful for debugging and monitoring map data integrity
 void Map::dump(){ 
   CONSOLE.print("map dump - mapCRC=");
   CONSOLE.println(mapCRC);
@@ -562,18 +575,14 @@ void Map::dump(){
   points.dump();
   CONSOLE.print("perimeter pts: ");
   CONSOLE.println(perimeterPoints.numPoints);
-  //perimeterPoints.dump();
   CONSOLE.print("exclusion pts: ");
   CONSOLE.println(exclusionPointsCount);  
   CONSOLE.print("exclusions: ");  
   CONSOLE.println(exclusions.numPolygons);  
-  //exclusions.dump();  
   CONSOLE.print("dock pts: ");
   CONSOLE.println(dockPoints.numPoints);
-  //dockPoints.dump();
   CONSOLE.print("mow pts: ");  
   CONSOLE.println(mowPoints.numPoints);  
-  //mowPoints.dump();
   if (mowPoints.numPoints > 0){
     CONSOLE.print("first mow point:");
     CONSOLE.print(mowPoints.points[0].x());
@@ -594,6 +603,8 @@ void Map::dump(){
 }
 
 
+// Check and report memory corruption and allocation errors
+// Critical for detecting memory management issues that could cause crashes
 void Map::checkMemoryErrors(){
   if (memoryCorruptions != 0){
     CONSOLE.print("********************* ERROR: memoryCorruptions=");
@@ -623,7 +634,7 @@ bool Map::load(){
   }
   uint32_t marker = 0;
   mapFile.read((uint8_t*)&marker, sizeof(marker));
-  if (marker != 0x00001000){
+  if (marker != MAP_FILE_MARKER){
     CONSOLE.print("ERROR: invalid marker: ");
     CONSOLE.println(marker, HEX);
     return false;
@@ -664,7 +675,7 @@ bool Map::save(){
     CONSOLE.println("ERROR opening file for writing");
     return false;
   }
-  uint32_t marker = 0x00001000;
+  uint32_t marker = MAP_FILE_MARKER;
   res &= (mapFile.write((uint8_t*)&marker, sizeof(marker)) != 0);
   res &= (mapFile.write((uint8_t*)&mapCRC, sizeof(mapCRC)) != 0);
   res &= (mapFile.write((uint8_t*)&exclusionPointsCount, sizeof(exclusionPointsCount)) != 0);
@@ -736,8 +747,8 @@ bool Map::setPoint(int idx, float x, float y){
   if (idx == 0){   
     clearMap();
   }    
-  if (idx % 100 == 0){
-    if (freeMemory () < 20000){
+  if (idx % MAP_MEMORY_CHECK_INTERVAL == 0){
+    if (freeMemory () < MAP_MIN_FREE_MEMORY){
       CONSOLE.println("OUT OF MEMORY");
       return false;
     }
@@ -849,10 +860,10 @@ void Map::generateRandomMap(){
   clearMap();    
   int idx = 0;
   float angle = 0;
-  int steps = 30;
+  int steps = MAP_RANDOM_PERIMETER_STEPS;
   for (int i=0; i < steps; i++){
-    float maxd = 10;
-    float d = 10 + ((float)random(maxd*10))/10.0;  // -d/2;
+    float maxd = MAP_RANDOM_MAX_DISTANCE;
+    float d = MAP_RANDOM_MAX_DISTANCE + ((float)random(maxd*10))/10.0;  // -d/2;
     float x = cos(angle) * d;
     float y = sin(angle) * d; 
     setPoint(idx, x, y);
@@ -944,7 +955,7 @@ bool Map::nextPointIsStraight(){
   angleNext = scalePIangles(angleNext, angleCurr);                    
   float diffDelta = distancePI(angleCurr, angleNext);                 
   //CONSOLE.println(fabs(diffDelta)/PI*180.0);
-  return ((fabs(diffDelta)/PI*180.0) < 20);
+  return ((fabs(diffDelta)/PI*180.0) < MAP_STRAIGHT_PATH_ANGLE_THRESHOLD);
 }
 
 
