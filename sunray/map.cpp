@@ -22,10 +22,6 @@
 
 Point *CHECK_POINT = (Point*)0x12345678;  // just some arbitray address for corruption check
 
-// Point class constants
-const float METERS_TO_CM_FACTOR = 100.0;     // Conversion factor: meters to centimeters
-const byte POINT_FILE_MARKER = 0xAA;          // File integrity marker for Point serialization
-
 // Polygon class constants
 const byte POLYGON_FILE_MARKER = 0xBB;        // File integrity marker for Polygon serialization
 const short MAX_POLYGON_POINTS = 10000;       // Maximum allowed points per polygon
@@ -48,80 +44,6 @@ const float MAP_STRAIGHT_PATH_ANGLE_THRESHOLD = 20.0; // Angle threshold (degree
 
 unsigned long memoryCorruptions = 0;        
 unsigned long memoryAllocErrors = 0;
-
-
-// Default constructor - initializes point at origin (0,0)
-Point::Point(){
-  init();
-}
-
-// Initialize point coordinates to origin
-void Point::init(){
-  px = 0;
-  py = 0;
-}
-
-// Get X coordinate in meters (converts from internal cm storage)
-float Point::x(){
-  return ((float)px) / METERS_TO_CM_FACTOR;
-}
-
-// Get Y coordinate in meters (converts from internal cm storage)
-float Point::y(){
-  return ((float)py) / METERS_TO_CM_FACTOR;
-}
-
-
-// Constructor with coordinates in meters (stored internally as cm for precision)
-Point::Point(float ax, float ay){
-  px = ax * METERS_TO_CM_FACTOR;
-  py = ay * METERS_TO_CM_FACTOR;
-}
-
-// Copy coordinates from another point
-void Point::assign(Point &fromPoint){
-  px = fromPoint.px;
-  py = fromPoint.py;
-}
-
-// Set coordinates in meters (converted to cm for internal storage)
-void Point::setXY(float ax, float ay){
-  px = ax * METERS_TO_CM_FACTOR;
-  py = ay * METERS_TO_CM_FACTOR;
-}
-
-// Calculate simple checksum for data integrity verification
-long Point::crc(){
-  return (px + py);  
-}
-
-// Read point data from file with integrity check (0xAA marker)
-bool Point::read(File &file){
-  byte marker = file.read();
-  if (marker != POINT_FILE_MARKER){
-    CONSOLE.println("ERROR reading point: invalid marker");
-    return false;
-  }
-  bool res = true;
-  res &= (file.read((uint8_t*)&px, sizeof(px)) != 0);
-  res &= (file.read((uint8_t*)&py, sizeof(py)) != 0);
-  if (!res) {
-    CONSOLE.println("ERROR reading point");
-  }
-  return res;
-}
-
-// Write point data to file with integrity marker (0xAA)
-bool Point::write(File &file){
-  bool res = true;
-  res &= (file.write(POINT_FILE_MARKER) != 0);
-  res &= (file.write((uint8_t*)&px, sizeof(px)) != 0);
-  res &= (file.write((uint8_t*)&py, sizeof(py)) != 0);
-  if (!res) {
-    CONSOLE.println("ERROR writing point");
-  }
-  return res;
-}
 
 
 // -----------------------------------
