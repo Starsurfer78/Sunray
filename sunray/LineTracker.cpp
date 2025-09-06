@@ -144,7 +144,7 @@ void trackLine(bool runControl){
     } 
     else {
       if ((stateLocalizationMode == LOC_GPS) && (gps.solution == SOL_FLOAT)){        
-        linear = min(setSpeed, 0.1); // reduce speed for float solution
+        linear = min(setSpeed, 0.1f); // reduce speed for float solution
         //CONSOLE.println("SLOW: float");
       } else
         linear = setSpeed;         // desired speed
@@ -168,7 +168,7 @@ void trackLine(bool runControl){
           CONSOLE.println("motor overload detected: reducing linear speed");
       }
       printmotoroverload = true;
-      linear = min(linear, MOTOR_OVERLOAD_SPEED);  
+      linear = min(linear, (float)MOTOR_OVERLOAD_SPEED);  
       //CONSOLE.println("SLOW: overload");
     } else {
       printmotoroverload = false;
@@ -244,7 +244,7 @@ void trackLine(bool runControl){
       if (!buzzer.isPlaying()) buzzer.sound(SND_WARNING, true);
       float maxAngular = 0.015;  // 0.02
       float maxLinear = 0.05;      
-      angular =  max(min(1.0 * trackerDiffDelta, maxAngular), -maxAngular);
+      angular =  max(min(1.0f * trackerDiffDelta, maxAngular), -maxAngular);
       angular =  max(min(angular, maxAngular), -maxAngular);      
       linear = 0.05;      
       if (maps.trackReverse) linear = -0.05;   // reverse line tracking needs negative speed           

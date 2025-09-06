@@ -8,6 +8,7 @@
 #include "StateEstimator.h"
 #include "events.h"
 #include "helper.h"
+#include "MapConstants.h"
 #include <Arduino.h>
 
 
@@ -17,403 +18,29 @@
 
 // we check for memory corruptions by storing one additional item in all dynamic arrays and 
 // checking the value of the item during free operation
-#define CHECK_CORRUPT   1
-#define CHECK_ID        0x4A4A
+// Constants moved to MapConstants.h
 
 Point *CHECK_POINT = (Point*)0x12345678;  // just some arbitray address for corruption check
 
-unsigned long memoryCorruptions = 0;        
-unsigned long memoryAllocErrors = 0;
+// External memory error counters (defined in SafeArray.cpp)
+extern unsigned long memoryCorruptions;
+extern unsigned long memoryAllocErrors;
 
 
-Point::Point(){
-  init();
-}
-
-void Point::init(){
-  px = 0;
-  py = 0;
-}
-
-float Point::x(){
-  return ((float)px) / 100.0;
-}
-
-float Point::y(){
-  return ((float)py) / 100.0;
-}
-
-
-Point::Point(float ax, float ay){
-  px = ax * 100;
-  py = ay * 100;
-}
-
-void Point::assign(Point &fromPoint){
-  px = fromPoint.px;
-  py = fromPoint.py;
-}
-
-void Point::setXY(float ax, float ay){
-  px = ax * 100;
-  py = ay * 100;
-}
-
-long Point::crc(){
-  return (px + py);  
-}
-
-bool Point::read(File &file){
-  byte marker = file.read();
-  if (marker != 0xAA){
-    CONSOLE.println("ERROR reading point: invalid marker");
-    return false;
-  }
-  bool res = true;
-  res &= (file.read((uint8_t*)&px, sizeof(px)) != 0);
-  res &= (file.read((uint8_t*)&py, sizeof(py)) != 0);
-  if (!res) {
-    CONSOLE.println("ERROR reading point");
-  }
-  return res;
-}
-
-bool Point::write(File &file){
-  bool res = true;
-  res &= (file.write(0xAA) != 0);
-  res &= (file.write((uint8_t*)&px, sizeof(px)) != 0);
-  res &= (file.write((uint8_t*)&py, sizeof(py)) != 0);
-  if (!res) {
-    CONSOLE.println("ERROR writing point");
-  }
-  return res;
-}
+// Point implementations moved to Point.cpp
 
 
 // -----------------------------------
-Polygon::Polygon(){  
-  init();
-}
-
-
-Polygon::Polygon(short aNumPoints){ 
-  init();
-  alloc(aNumPoints);  
-}
-
-void Polygon::init(){  
-  numPoints = 0;  
-  points = NULL;
-}
-
-Polygon::~Polygon(){
-  // dealloc();
-}
-
-bool Polygon::alloc(short aNumPoints){
-  if (aNumPoints == numPoints) return true;
-  if ((aNumPoints < 0) || (aNumPoints > 10000)) {
-    CONSOLE.println("ERROR Polygon::alloc invalid number");    
-    return false;
-  }
-  Point* newPoints = new Point[aNumPoints+CHECK_CORRUPT];    
-  if (newPoints == NULL) {
-    CONSOLE.println("ERROR Polygon::alloc out of memory");
-    memoryAllocErrors++;
-    return false;
-  }
-  if (points != NULL){
-    memcpy(newPoints, points, sizeof(Point)* min(numPoints,aNumPoints) );        
-    if (points[numPoints].px != CHECK_ID) memoryCorruptions++;
-    if (points[numPoints].py != CHECK_ID) memoryCorruptions++;
-    delete[] points;    
-  } 
-  points = newPoints;              
-  numPoints = aNumPoints;
-  points[numPoints].px=CHECK_ID;
-  points[numPoints].py=CHECK_ID;
-  return true;
-}
-
-void Polygon::dealloc(){
-  if (points == NULL) return;  
-  if (points[numPoints].px != CHECK_ID) memoryCorruptions++;
-  if (points[numPoints].py != CHECK_ID) memoryCorruptions++;
-  delete[] points;  
-  points = NULL;
-  numPoints = 0;  
-}
-
-void Polygon::dump(){
-  for (int i=0; i < numPoints; i++){
-    CONSOLE.print("(");
-    CONSOLE.print(points[i].x());
-    CONSOLE.print(",");
-    CONSOLE.print(points[i].y());
-    CONSOLE.print(")");   
-    if (i < numPoints-1) CONSOLE.print(",");
-  }
-  CONSOLE.println();
-}
-
-long Polygon::crc(){
-  long crc = 0;
-  for (int i=0; i < numPoints; i++){
-    crc += points[i].crc();
-  }
-  return crc;
-}
-
-bool Polygon::read(File &file){
-  byte marker = file.read();
-  if (marker != 0xBB){
-    CONSOLE.println("ERROR reading polygon: invalid marker");
-    return false;
-  }
-  short num = 0;
-  file.read((uint8_t*)&num, sizeof(num));
-  //CONSOLE.print("reading points:");
-  //CONSOLE.println(num);
-  if (!alloc(num)) return false;
-  for (short i=0; i < num; i++){    
-    if (!points[i].read(file)) return false;
-  }
-  return true;
-}
-
-bool Polygon::write(File &file){
-  if (file.write(0xBB) == 0) return false;  
-  if (file.write((uint8_t*)&numPoints, sizeof(numPoints)) == 0) {
-    CONSOLE.println("ERROR writing polygon");
-    return false; 
-  }
-  //CONSOLE.print("writing points:");
-  //CONSOLE.println(numPoints);
-  for (int i=0; i < numPoints; i++){    
-    if (!points[i].write(file)) return false;
-  }
-  return true;  
-}
-
-void Polygon::getCenter(Point &pt){
-  float minX = 9999;
-  float maxX = -9999;
-  float minY = 9999;
-  float maxY = -9999;
-  for (int i=0; i < numPoints; i++){
-    minX = min(minX, points[i].x());
-    maxX = max(maxX, points[i].x());
-    minY = min(minY, points[i].y());
-    maxY = max(maxY, points[i].y());
-  }
-  pt.setXY( (maxX-minX)/2, (maxY-minY)/2 ); 
-}
+// Polygon implementations moved to Polygon.cpp
 
 // -----------------------------------
 
-PolygonList::PolygonList(){
-  init();
-}
-  
-PolygonList::PolygonList(short aNumPolygons){
-  init();
-  alloc(aNumPolygons);  
-}
-
-void PolygonList::init(){
-  numPolygons = 0;
-  polygons = NULL;  
-}
-
-PolygonList::~PolygonList(){
-  //dealloc();
-}
-
-bool PolygonList::alloc(short aNumPolygons){  
-  if (aNumPolygons == numPolygons) return true;
-  if ((aNumPolygons < 0) || (aNumPolygons > 5000)) {
-    CONSOLE.println("ERROR PolygonList::alloc invalid number");    
-    return false;
-  }
-  Polygon* newPolygons = new Polygon[aNumPolygons+CHECK_CORRUPT];  
-  if (newPolygons == NULL){
-    CONSOLE.println("ERROR PolygonList::alloc out of memory");
-    memoryAllocErrors++;
-    return false;
-  }
-  if (polygons != NULL){
-    memcpy(newPolygons, polygons, sizeof(Polygon)* min(numPolygons, aNumPolygons));        
-    if (aNumPolygons < numPolygons){
-      for (int i=aNumPolygons; i < numPolygons; i++){
-        //polygons[i].dealloc();        
-      }  
-    }
-    if (polygons[numPolygons].points != CHECK_POINT) memoryCorruptions++;
-    delete[] polygons;    
-  } 
-  polygons = newPolygons;              
-  numPolygons = aNumPolygons;  
-  polygons[numPolygons].points = CHECK_POINT;
-  return true;
-}
-
-void PolygonList::dealloc(){
-  if (polygons == NULL) return;
-  for (int i=0; i < numPolygons; i++){
-    polygons[i].dealloc();        
-  }  
-  if (polygons[numPolygons].points != CHECK_POINT) memoryCorruptions++;
-  delete[] polygons;
-  polygons = NULL;
-  numPolygons = 0;  
-}
-
-int PolygonList::numPoints(){
-  int num = 0;
-  for (int i=0; i < numPolygons; i++){
-     num += polygons[i].numPoints;
-  }
-  return num;
-}
-
-void PolygonList::dump(){
-  for (int i=0; i < numPolygons; i++){
-    CONSOLE.print(i);
-    CONSOLE.print(":");
-    polygons[i].dump();
-  }  
-  CONSOLE.println();
-}
-
-long PolygonList::crc(){
-  long crc = 0;
-  for (int i=0; i < numPolygons; i++){
-    crc += polygons[i].crc();
-  }
-  return crc;
-}
-
-bool PolygonList::read(File &file){
-  byte marker = file.read();
-  if (marker != 0xCC){
-    CONSOLE.println("ERROR reading polygon list: invalid marker");
-    return false;
-  }
-  short num = 0;
-  file.read((uint8_t*)&num, sizeof(num)); 
-  //CONSOLE.print("reading polygon list:");
-  //CONSOLE.println(num);
-  if (!alloc(num)) return false;
-  for (short i=0; i < num; i++){    
-    if (!polygons[i].read(file)) return false;
-  }
-  return true;
-}
-
-bool PolygonList::write(File &file){
-  if (file.write(0xCC) == 0) {
-    CONSOLE.println("ERROR writing polygon list marker");
-    return false;  
-  } 
-  if (file.write((uint8_t*)&numPolygons, sizeof(numPolygons)) == 0) {
-    CONSOLE.println("ERROR writing polygon list");
-    return false; 
-  }
-  //CONSOLE.print("writing polygon list:");
-  //CONSOLE.println(numPolygons);
-  for (int i=0; i < numPolygons; i++){    
-    if (!polygons[i].write(file)) return false;
-  }
-  return true;  
-}
+// PolygonList implementations moved to PolygonList.cpp
 
 
 // -----------------------------------
 
-Node::Node(){
-  init();
-}
-
-Node::Node(Point *aPoint, Node *aParentNode){
-  init();
-  point = aPoint;
-  parent = aParentNode;  
-};
-
-void Node::init(){
-  g = 0;
-  h = 0;  
-  f = 0;
-  opened = false;
-  closed = false;
-  point = NULL;
-  parent = NULL;
-}
-
-void Node::dealloc(){
-}
-
-
-// -----------------------------------
-
-
-
-NodeList::NodeList(){
-  init();
-}
-  
-NodeList::NodeList(short aNumNodes){
-  init();
-  alloc(aNumNodes);  
-}
-
-void NodeList::init(){
-  numNodes = 0;
-  nodes = NULL;  
-}
-
-NodeList::~NodeList(){
-  //dealloc();
-}
-
-bool NodeList::alloc(short aNumNodes){  
-  if (aNumNodes == numNodes) return true;
-  if ((aNumNodes < 0) || (aNumNodes > 20000)) {
-    CONSOLE.println("ERROR NodeList::alloc invalid number");    
-    return false;
-  }
-  Node* newNodes = new Node[aNumNodes+CHECK_CORRUPT];  
-  if (newNodes == NULL){
-    CONSOLE.println("ERROR NodeList::alloc");
-    memoryAllocErrors++;
-    return false;
-  }
-  if (nodes != NULL){
-    memcpy(newNodes, nodes, sizeof(Node)* min(numNodes, aNumNodes));        
-    if (aNumNodes < numNodes){
-      for (int i=aNumNodes; i < numNodes; i++){
-        //nodes[i].dealloc();        
-      }  
-    }
-    if (nodes[numNodes].point != CHECK_POINT) memoryCorruptions++;
-    delete[] nodes;    
-  } 
-  nodes = newNodes;              
-  numNodes = aNumNodes;  
-  nodes[numNodes].point=CHECK_POINT;
-  return true;
-}
-
-void NodeList::dealloc(){
-  if (nodes == NULL) return;
-  for (int i=0; i < numNodes; i++){
-    nodes[i].dealloc();        
-  }  
-  if (nodes[numNodes].point != CHECK_POINT) memoryCorruptions++;
-  delete[] nodes;
-  nodes = NULL;
-  numNodes = 0;  
-}
+// Node and NodeList implementations moved to PathFinder.cpp
 
 
 
@@ -1856,7 +1483,7 @@ bool Map::findPath(Point &src, Point &dst){
     int idx = 0;
     if (!pathFinderObstacles.alloc(1 + exclusions.numPolygons + obstacles.numPolygons)) return false;
     
-    if (freeMemory () < 5000){
+    if (freeMemory () < MIN_FREE_MEMORY_BYTES){
       CONSOLE.println("OUT OF MEMORY");
       return false;
     }
@@ -1865,15 +1492,15 @@ bool Map::findPath(Point &src, Point &dst){
     // and end point. To have something to check intersection with, we offset the perimeter (make bigger) and exclusions
     //  (maker schmaller) and use them as 'obstacles'.
     
-    if (!polygonOffset(perimeterPoints, pathFinderObstacles.polygons[idx], 0.04)) return false;
+    if (!polygonOffset(perimeterPoints, pathFinderObstacles.polygons[idx], PATHFINDER_OBSTACLE_OFFSET)) return false;
     idx++;
     
     for (int i=0; i < exclusions.numPolygons; i++){
-      if (!polygonOffset(exclusions.polygons[i], pathFinderObstacles.polygons[idx], -0.04)) return false;
+      if (!polygonOffset(exclusions.polygons[i], pathFinderObstacles.polygons[idx], -PATHFINDER_OBSTACLE_OFFSET)) return false;
       idx++;
     }      
     for (int i=0; i < obstacles.numPolygons; i++){
-      if (!polygonOffset(obstacles.polygons[i], pathFinderObstacles.polygons[idx], -0.04)) return false;
+      if (!polygonOffset(obstacles.polygons[i], pathFinderObstacles.polygons[idx], -PATHFINDER_OBSTACLE_OFFSET)) return false;
       idx++;
     }  
     
@@ -1938,7 +1565,7 @@ bool Map::findPath(Point &src, Point &dst){
     //CONSOLE.print("sz=");
     //CONSOLE.println(sizeof(visitedPoints));
     
-    int timeout = 1000;    
+    int timeout = PATHFINDER_TIMEOUT;    
     Node *currentNode = NULL;
     
     CONSOLE.print ("freem=");
@@ -1947,7 +1574,7 @@ bool Map::findPath(Point &src, Point &dst){
     CONSOLE.println("starting path-finder");
     while(true) {       
       if (millis() >= nextProgressTime){
-        nextProgressTime = millis() + 4000;          
+        nextProgressTime = millis() + PATHFINDER_PROGRESS_INTERVAL;          
         CONSOLE.print(".");
         watchdogReset();     
       }
@@ -1981,7 +1608,7 @@ bool Map::findPath(Point &src, Point &dst){
       currentNode = &pathFinderNodes.nodes[lowInd]; 
       // console.log('ol '+openList.length + ' cl ' + closedList.length + ' ' + currentNode.pos.X + ',' + currentNode.pos.Y);
       // End case -- result has been found, return the traced path
-      if (distance(*currentNode->point, *end->point) < 0.02) break;        
+      if (distance(*currentNode->point, *end->point) < PATHFINDER_GOAL_TOLERANCE) break;        
       // Normal case -- move currentNode from open to closed, process each of its neighbors      
       currentNode->opened = false;
       currentNode->closed = true;

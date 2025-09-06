@@ -9,97 +9,14 @@
 
 #include <Arduino.h>
 #include <SD.h>
-
+#include "Point.h"
+#include "Polygon.h"
+#include "PolygonList.h"
+#include "PathFinder.h"
 
 // waypoint type
 enum WayType {WAY_PERIMETER, WAY_EXCLUSION, WAY_DOCK, WAY_MOW, WAY_FREE};
 typedef enum WayType WayType;
-
-// a point on the map
-class Point
-{
-  public:
-    short px; // cm
-    short py; // cm       
-    Point();
-    Point(float ax, float ay); // meter
-    float x();  // meter
-    float y();  // meter
-    void init();
-    void setXY(float ax, float ay); // meter
-    void assign(Point &fromPoint); 
-    long crc();
-    bool read(File &file);
-    bool write(File &file);
-};
-
-// a closed loop of points
-class Polygon
-{
-  public:
-    Point *points;    
-    short numPoints;    
-    Polygon();
-    Polygon(short aNumPoints);
-    ~Polygon();
-    void init();
-    bool alloc(short aNumPoints);
-    void dealloc();
-    void dump();
-    long crc();
-    void getCenter(Point &pt);
-    bool read(File &file);
-    bool write(File &file);
-};
-
-// a list of polygons
-class PolygonList // owns polygons!
-{
-   public:
-     Polygon *polygons;    
-     short numPolygons;     
-     PolygonList();
-     PolygonList(short aNumPolygons);
-     ~PolygonList();
-     void init();
-     bool alloc(short aNumPolygons);
-     void dealloc();
-     void dump();
-     int numPoints();
-     long crc();
-     bool read(File &file);
-     bool write(File &file);
-};
-
-class Node   // nodes just hold references to points and other nodes
-{
-  public:
-    Point *point;
-    Node *parent;
-    bool opened;
-    bool closed;
-    float g;
-    float h;
-    float f;
-    Node();
-    Node(Point *aPoint, Node *aParentNode);
-    void init();
-    void dealloc();
-};
-
-// a list of nodes
-class NodeList  // owns nodes!
-{
-  public:
-    Node *nodes;    
-    short numNodes;     
-    NodeList();
-    NodeList(short aNumNodes);
-    ~NodeList();
-    void init();
-    bool alloc(short aNumNodes);
-    void dealloc();    
-};
 
 
 
@@ -226,9 +143,10 @@ class Map
     void generateRandomMap();    
     // check if given point is inside perimeter (and outside exclusions) of current map 
     bool isInsidePerimeterOutsideExclusions(Point &pt);
+    bool polygonOffset(Polygon &srcPoly, Polygon &dstPoly, float dist);
+    void checkMemoryErrors();
   private:
     void finishedUploadingMap();
-    void checkMemoryErrors();
     bool nextMowPoint(bool sim);
     bool nextDockPoint(bool sim);
     bool nextFreePoint(bool sim);        
@@ -242,7 +160,6 @@ class Map
     bool lineIntersects (Point &p0, Point &p1, Point &p2, Point &p3);        
     bool linePolygonIntersection( Point &src, Point &dst, Polygon &poly);
     float polygonArea(Polygon &poly);
-    bool polygonOffset(Polygon &srcPoly, Polygon &dstPoly, float dist);
     int findNextNeighbor(NodeList &nodes, PolygonList &obstacles, Node &node, int startIdx);
     void findPathFinderSafeStartPoint(Point &src, Point &dst);
     bool linePolygonIntersectPoint( Point &src, Point &dst, Polygon &poly, Point &sect);

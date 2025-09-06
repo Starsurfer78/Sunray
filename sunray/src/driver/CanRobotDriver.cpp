@@ -269,7 +269,7 @@ void CanRobotDriver::requestMowHeight(int mowHeightMillimeter){
   float heightMin = 20;  // min. allowed height   (20mm)
   float heightMax = 90;  // max. allowed height   (60mm)
   float motorAnglePerMillimeter = 325;  // motor angles per millimeter (320)  
-  mowHeightMillimeter = max(heightMin, min(mowHeightMillimeter, heightMax));  // limit to allowed min/max  
+  mowHeightMillimeter = max((int)heightMin, min(mowHeightMillimeter, (int)heightMax));  // limit to allowed min/max  
   canDataType_t data;  
   if (motorHeightFoundEndswitch){
     bool sendTarget = true;

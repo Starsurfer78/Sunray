@@ -12,11 +12,7 @@
   #include "src/esp/WiFiEspUdp.h"
 #endif
 
-#if defined(_SAM3XA_)                 // Arduino Due
-  #define CONSOLE SerialUSB
-#else
-  #define CONSOLE Serial
-#endif
+// CONSOLE definition is now handled in config.h
 
 
 #if !defined(NO_GLOBAL_INSTANCES) && !defined(NO_GLOBAL_SERIAL)

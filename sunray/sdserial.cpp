@@ -1,21 +1,15 @@
-  // Ardumower Sunray 
+// Ardumower Sunray 
 // Copyright (c) 2013-2020 by Alexander Grau, Grau GmbH
 // Licensed GPLv3 for open source use
 // or Grau GmbH Commercial License for commercial use (http://grauonline.de/cms2/?page_id=153)
 
 #include "sdserial.h"
+#include "config.h"
 #include <SD.h>
 
 
 
-#ifdef _SAM3XA_                 // Arduino Due
-  #define CONSOLE SerialUSB
-#elif __SAMD51__
-  #define CONSOLE Serial
-#else
-  #include <Console.h>
-  #define CONSOLE Console
-#endif
+// CONSOLE definition is now handled in config.h
 
 
 #if !defined(NO_GLOBAL_INSTANCES) && !defined(NO_GLOBAL_SERIAL)
