@@ -136,6 +136,6 @@ fi
 
 
 # debug mode
-# exec gdbserver :1234 /home/pi/sunray_install/sunray "$@"
-# debug executable with:  gdb /home/pi/sunray_install/sunray
+# exec gdbserver :1234 $HOME/sunray/sunray "$@"
+# debug executable with:  gdb $HOME/sunray/sunray
 

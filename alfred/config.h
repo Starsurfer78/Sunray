@@ -73,7 +73,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define MPU_ADDR 0x69  // I2C address (0x68 if AD0=LOW, 0x69 if AD0=HIGH)
 
 // imu fifo rate (Hz)
-#define IMU_FIFO_RATE 5
+#define IMU_FIFO_RATE 30
 
 // should the mower turn off if IMU is tilt over? (yes: uncomment line, no: comment line)
 #define ENABLE_TILT_DETECTION  1
@@ -487,6 +487,9 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 #define STANLEY_CONTROL_P_SLOW    1.1   // 1.0 for path tracking control (angular gain) when docking tracking
 #define STANLEY_CONTROL_K_SLOW    0.1   // 0.2 for path tracking control (lateral gain) when docking tracking
+
+// lateral error smoothing filter for track keeping
+#define LATERAL_ERROR_FILTER_ALPHA 0.3  // low-pass filter coefficient for lateral error smoothing (0.0-1.0, higher = more smoothing)
 
 
 // ----- other options --------------------------------------------

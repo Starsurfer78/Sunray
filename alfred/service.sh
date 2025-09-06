@@ -10,6 +10,46 @@ echo "PWD=$PWD"
 CMD=""
 
 
+function clean_build() {
+  echo "Performing thorough build cleanup..."
+  
+  # Remove config.h from sunray directory
+  if [ -f "../sunray/config.h" ]; then
+    sudo rm -f ../sunray/config.h
+    echo "Removed ../sunray/config.h"
+  fi
+  
+  # Clean root directory cmake artifacts
+  rm -f CMakeCache.txt
+  rm -f cmake_install.cmake
+  rm -f Makefile
+  rm -Rf CMakeFiles
+  echo "Removed CMake artifacts from root directory"
+  
+  # Clean build directory completely
+  if [ -d "build" ]; then
+    cd build
+    rm -Rf *
+    rm -f .* 2>/dev/null || true
+    cd ..
+    echo "Cleaned build directory"
+  fi
+  
+  # Clean any leftover object files and executables
+  find . -name "*.o" -delete 2>/dev/null || true
+  find . -name "*.so" -delete 2>/dev/null || true
+  find . -name "sunray" -type f -delete 2>/dev/null || true
+  
+  # Clean any backup files and temporary files
+  find . -name "*~" -delete 2>/dev/null || true
+  find . -name "*.bak" -delete 2>/dev/null || true
+  find . -name "*.tmp" -delete 2>/dev/null || true
+  
+  echo "Build cleanup completed successfully!"
+  echo "All build artifacts, cache files, and temporary files have been removed."
+  echo "You can now perform a clean build without any leftover state."
+}
+
 function build_sunray() {
   if ! command -v cmake &> /dev/null
   then
@@ -31,14 +71,11 @@ function build_sunray() {
   done
   echo "selected: $CONFIG_FILE"
 
+  # Perform thorough cleanup before build
+  clean_build
+  
   CONFIG_PATHNAME=$PWD/$CONFIG_FILE
-  sudo rm ../sunray/config.h
-  rm -f CMakeCache.txt
-  rm -f cmake_install.cmake
-  rm -Rf CMakeFiles
   cd build
-  rm -Rf * 
-  #exit
   cmake -D CONFIG_FILE=$CONFIG_PATHNAME ..
   make 
 }
@@ -257,6 +294,7 @@ fi
 compile_menu () {
     echo "Compile and test menu (NOTE: press CTRL+C to stop any pending actions)"
     options=(
+        "Clean build artifacts (thorough cleanup)" 
         "Build sunray executable (you can choose config file)" 
         "Rebuild sunray executable (using last choosen config file)"
         "Run sunray executable"
@@ -267,26 +305,30 @@ compile_menu () {
     select option in "${options[@]}"; do
         case $option in
             ${options[0]})
-                build_sunray
+                clean_build
                 break
             ;;
             ${options[1]})
-                rebuild_sunray
+                build_sunray
                 break
             ;;
             ${options[2]})
-                start_sunray
+                rebuild_sunray
                 break
             ;;
             ${options[3]})
-                start_sunray_motor_test
+                start_sunray
                 break
             ;;
             ${options[4]})
-                start_sunray_sensor_test
+                start_sunray_motor_test
                 break
             ;;
             ${options[5]})
+                start_sunray_sensor_test
+                break
+            ;;
+            ${options[6]})
                 return
              ;;
             *) 

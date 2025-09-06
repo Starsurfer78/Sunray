@@ -8,7 +8,7 @@ reset halt
 
 echo "----Flashing----"
 
-program /home/pi/sunray_install/firmware/rm18.ino.bin 0x08000000 verify reset exit
+program $::env(HOME)/sunray/alfred/firmware/rm18.ino.bin 0x08000000 verify reset exit
 
 
 

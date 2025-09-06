@@ -3,48 +3,6 @@
 // Licensed GPLv3 for open source use
 // or Grau GmbH Commercial License for commercial use (http://grauonline.de/cms2/?page_id=153)
 
-/* 
-   WARNING: all software, hardware and motor components are designed and optimized as a whole, if you 
-   try to replace or exclude some component not as designed, you risk to damage your hardware with 
-   the software.
-
-   see Wiki for installation details:
-   http://wiki.ardumower.de/index.php?title=Ardumower_Sunray
-
-   requirements:
-   + Ardumower chassis and Ardumower kit mowing and gear motors   
-   + Ardumower PCB 1.3/1.4 
-   +   Adafruit Grand Central M4 (highly recommended) or Arduino Due 
-   +   Ardumower BLE UART module (HM-10/CC2540/CC2541)
-   +   optional: Ardumower IMU (MPU6050/MPU9150/MPU9250/MPU9255) - choose your IMU below
-   +   optional: Ardumower WIFI (ESP8266 ESP-01 with stock firmware)   
-   +   optional: HTU21D temperature/humidity sensor
-   +   optional: sonar, bumperduino, freewheel sensor
-   + Ardumower RTK (ublox F9P)
-
-
-1. Rename file 'config_example.h' into 'config.h'
-
-2. Configure the options below and finally compile and upload this project.
-
-
-Adafruit Grand Central M4 NOTE: You have to add SDA, SCL pull-up resistors to the board 
-and deactivate Due clone reset cicuit (JP13):
-https://wiki.ardumower.de/index.php?title=Ardumower_Sunray#Adafruit_Grand_Central_M4
-
-Arduino Due UPLOAD NOTE:  
-
-If using Arduino Due 'native' USB port for uploading, choose board 'Arduino Due native' in the 
-Arduino IDE and COM port 'Arduino Due native port'. 
-
-If using Arduino Due 'programming' USB port for uploading, choose board 'Arduino Due programming' in the 
-Arduino IDE and COM port 'Arduino Due programming port'. 
-
-Also, you may choose the serial port below for serial monitor output (CONSOLE).
-   
-*/
-
-
 #define DRV_SERIAL_ROBOT  1     // Linux (Alfred)
 //#define DRV_CAN_ROBOT  1     // Linux (owlRobotics platform)
 //#define DRV_ARDUMOWER     1   // keep this for Ardumower
@@ -112,7 +70,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define FREEWHEEL_IS_AT_BACKSIDE   false   // default Ardumower: true   (change to false, if your freewheel is at frontside) - this is used for obstacle avoidance
 #define WHEEL_BASE_CM         39         // wheel-to-wheel distance (cm)        
 #define WHEEL_DIAMETER        205        // wheel diameter (mm)                 
-#define MOWER_SIZE            64         // mower / chassis size / length in cm
+#define MOWER_SIZE            60         // mower / chassis size / length in cm
 
 //#define ENABLE_ODOMETRY_ERROR_DETECTION  true    // use this to detect odometry erros
 #define ENABLE_ODOMETRY_ERROR_DETECTION  false
@@ -181,7 +139,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 //#define MAX_MOW_PWM 200  // use this to permanently reduce mowing motor power (255=max)
 
 #define MOW_FAULT_CURRENT 8.0       // mowing motor fault current (amps)
-#define MOW_TOO_LOW_CURRENT 0.005   // mowing motor too low current (amps) , set to zero (0) to disable
+#define MOW_TOO_LOW_CURRENT 0.1   // mowing motor too low current (amps) , set to zero (0) to disable
 #define MOW_OVERLOAD_CURRENT 2.0    // mowing motor overload current (amps)
 
 // should the direction of mowing motor toggle each start? (yes: true, no: false)
@@ -220,10 +178,12 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define WIFI_SSID "ssid"            // choose WiFi network ID
 #define WIFI_PASS "pass"      // choose WiFi network password
 
-// ------ WiFi Restart functionality (Linux only) ----------------------
-#define WIFI_CHECK_INTERVAL_MS 30000     // WiFi connection check interval (30 seconds)
-#define WIFI_MAX_FAILURES 3              // Max consecutive WiFi failures before restart
-#define WIFI_RESTART_DELAY_MS 5000       // Delay after WiFi restart (5 seconds)
+// ------ WiFi automatic restart configuration (experimental) ----------------
+// automatic WiFi reconnection if connection is lost
+#define ENABLE_SIMPLE_WIFI_RESTART  true    // enable automatic WiFi restart? (uncomment to activate)
+#define WIFI_CHECK_INTERVAL_MS      7000     // WiFi status check interval (ms)
+#define WIFI_MAX_FAILURES           3        // max consecutive WiFi failures before restart
+#define WIFI_RESTART_DELAY_MS       5000     // delay after WiFi restart (ms)
 
 // client (app) --->  server (robot)
 #define ENABLE_SERVER true          // must be enabled if robot should act as server (recommended)
@@ -294,8 +254,8 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 //#define BUMPER_ENABLE false
 #define BUMPER_INVERT false       // invert bumper sensor state? 
 #define BUMPER_DEADTIME 800  		// linear motion dead-time (ms) after bumper is allowed to trigger
-#define BUMPER_TRIGGER_DELAY  30		// bumper must be active for (ms) to trigger
-#define BUMPER_MAX_TRIGGER_TIME 50	// if bumpersensor stays permanent triggered mower will stop with bumper error (time in seconds; 0 = disabled)																																				  
+#define BUMPER_TRIGGER_DELAY  0		// bumper must be active for (ms) to trigger
+#define BUMPER_MAX_TRIGGER_TIME 30	// if bumpersensor stays permanent triggered mower will stop with bumper error (time in seconds; 0 = disabled)																																				  
 
 // ------ LiDAR bumper ------------------------------------------
 #define LIDAR_BUMPER_ENABLE false
@@ -362,20 +322,22 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 #define GPS_CONFIG_FILTER   true     // use signal strength filter? (recommended to get rid of 'FIX jumps') - adjust filter settings below
 //#define GPS_CONFIG_FILTER   false     // use this if you have difficulties to get a FIX solution (uses ublox default filter settings)
 #define CPG_CONFIG_FILTER_MINELEV  10   // Min SV elevation degree: 14 (high elevation, less robust), 10 (low elevation, robust) 
-#define CPG_CONFIG_FILTER_NCNOTHRS 0   // C/N0 Threshold #SVs: 10 (robust), 6 (less robust)
-#define CPG_CONFIG_FILTER_CNOTHRS  0   // 30 dbHz (robust), 13 dbHz (less robust)
+#define CPG_CONFIG_FILTER_NCNOTHRS 8   // C/N0 Threshold #SVs: 10 (robust), 6 (less robust)
+#define CPG_CONFIG_FILTER_CNOTHRS  30   // 30 dbHz (robust), 13 dbHz (less robust)
 
+// ------ GPS antenna offset correction -------------------------
+// GPS antenna position relative to robot center (meters)
+// Use this if GPS antenna is not mounted at robot center
+#define ENABLE_ANTENNA_OFFSET_CORRECTION  true    // enable GPS antenna offset correction? (uncomment to activate)
+#define GPS_ANTENNA_OFFSET_X  -0.05  // Meter, forward from robot center (positive = forward, negative = backward)
+#define GPS_ANTENNA_OFFSET_Y  0.00  // Meter, sideways from robot center (positive = right, negative = left)  
+#define GPS_ANTENNA_OFFSET_Z  0.25  // Meter, vertical from robot center (positive = up, negative = down)
 
-#define GPS_ANTENNA_OFFSET_X  -0.20  // Meter, vorwärts vom Roboterzentrum
-#define GPS_ANTENNA_OFFSET_Y  0.00  // Meter, seitlich vom Roboterzentrum  
-#define GPS_ANTENNA_OFFSET_Z  0.25  // Meter, vertikal vom Roboterzentrum
-//#define ENABLE_ANTENNA_OFFSET_CORRECTION  // Aktiviert die Antennen-Offset-Korrektur
 
 // ------ obstacle detection and avoidance  -------------------------
 
 #define ENABLE_PATH_FINDER  true     // path finder calculates routes around exclusions and obstacles 
 //#define ENABLE_PATH_FINDER  false
-#define PATHFINDER_USE_EUCLIDEAN_HEURISTIC  true  // use Euclidean distance instead of Manhattan distance for A* heuristic
 #define ALLOW_ROUTE_OUTSIDE_PERI_METER 1.0   // max. distance (m) to allow routing from outside perimeter 
 // (increase if you get 'no map route' errors near perimeter)
 
@@ -384,7 +346,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 
 #define OBSTACLE_AVOIDANCE true   // try to find a way around obstacle
 //#define OBSTACLE_AVOIDANCE false  // stop robot on obstacle
-#define OBSTACLE_DIAMETER 1.2   // choose diameter of obstacles placed in front of robot (m) for obstacle avoidance
+#define OBSTACLE_DIAMETER 1.0   // choose diameter of obstacles placed in front of robot (m) for obstacle avoidance
 #define DISABLE_MOW_MOTOR_AT_OBSTACLE false // switch off mow motor while escape at detected obstacle; set false if mow motor shall not be stopped at detected obstacles
 
 // detect robot being kidnapped? robot will try GPS recovery if distance to tracked path is greater than a certain value
@@ -424,7 +386,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
 // ---- path tracking -----------------------------------
 
 // below this robot-to-target distance (m) a target is considered as reached
-#define TARGET_REACHED_TOLERANCE 0.1
+#define TARGET_REACHED_TOLERANCE 0.04
 
 // stanley control for path tracking - determines gain how fast to correct for lateral path errors
 #define STANLEY_CONTROL_P_NORMAL  1.1   // 3.0 for path tracking control (angular gain) when mowing
@@ -515,7 +477,7 @@ Also, you may choose the serial port below for serial monitor output (CONSOLE).
   #define GPS_HOST "127.0.0.1"  
   #define GPS_PORT 2947
   #define ROBOT SerialROBOT
-  #define SERIAL_ROBOT_PATH "/dev/ttyS0"  
+  #define SERIAL_ROBOT_PATH "/dev/ttyS0"
   #define NTRIP SerialNTRIP
   #define SERIAL_NTRIP_PATH "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_00000000-if00-port0"    
 #endif

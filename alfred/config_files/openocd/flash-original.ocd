@@ -9,5 +9,5 @@ reset halt
 echo "----Flashing----"
 
 
-program /home/pi/sunray_install/firmware/ngp_rm24.bin 0x08000000 verify reset exit
+program $::env(HOME)/sunray/alfred/firmware/ngp_rm24.bin 0x08000000 verify reset exit
 
